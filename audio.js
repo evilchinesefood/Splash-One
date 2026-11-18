@@ -181,6 +181,10 @@ window.PatrolAudio = (() => {
     },
     lock() { voice("sine", 820, 820, 0.11, 0.35); voice("sine", 1120, 1120, 0.15, 0.34, 0.095); },
     shield() { voice("sine", 360, 980, 0.41, 0.39); },
+    rapid() {
+      for (const [i, hz] of [260, 390, 585].entries())
+        voice("triangle", hz, hz * 1.16, 0.09, 0.31, i * 0.065);
+    },
     wisp() { voice("triangle", 800, 345, 0.16, 0.37); },
     upgrade() {
       [440, 554, 659, 880].forEach((hz, i) => voice("triangle", hz, hz, i === 3 ? 0.52 : 0.18, 0.38, i * 0.085));

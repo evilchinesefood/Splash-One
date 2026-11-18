@@ -19,6 +19,14 @@
     return copy;
   };
 
+  const pickupKinds = ["squadron", "shield", "rapid"];
+  const pickupHints = {
+    squadron: "Fly through the squadron beacon for an attack pass",
+    shield: "Fly through the shield beacon for a full recharge",
+    rapid: "Fly through the rapid-fire beacon to boost your cannon",
+  };
+  const rapidFireDuration = 12;
+
   const gear = {
     wisps: {
       name: "Wing Wisps",
@@ -197,7 +205,8 @@
       player: freshPlayer(),
       enemies: [],
       allies: [],
-      supportPickup: null,
+      pickup: null,
+      rapidFireRemaining: 0,
       shots: [],
       particles: [],
       wisps: [],
@@ -238,7 +247,7 @@
       bonusIntact,
       gap,
       nextRaid;
-    let nextSupport = Infinity;
+    let nextPickupAt = Infinity, pickupIndex = 0;
     let shotTimer = 0,
       recharge = 0,
       rollClock = 0,
@@ -285,8 +294,10 @@
         upgrades: Object.fromEntries(Object.keys(gear).map((id) => [id, 0])),
       });
       g.wisps.length = g.shots.length = g.particles.length = 0;
-      nextSupport = 10;
-      g.supportPickup = null;
+      nextPickupAt = 10;
+      pickupIndex = 0;
+      g.rapidFireRemaining = 0;
+      g.pickup = null;
       offered = {};
       tailReady = guardReady = 0;
       shotTimer = recharge = rollClock = 0;
@@ -473,8 +484,8 @@
       if (mission === encounters.fleet) unlock("arc");
       g.state = g.wave === g.waveCount ? "won" : "draft";
       g.choices = g.state === "draft" ? draftChoices() : [];
-      if (g.supportPickup) nextSupport = g.elapsed + 10;
-      g.supportPickup = null;
+      if (g.pickup) nextPickupAt = g.elapsed + 10;
+      g.pickup = null;
       g.allies.length = g.enemies.length = g.shots.length = 0;
       g.lockTarget = g.target = null;
       g.lockProgress = 0;
@@ -731,8 +742,8 @@
           };
           shot("cannon", nose, f, p.speed + 615, cannon ? 16 : 11, 1.64);
         }
-        // Preserve fractional cooldown across ticks for a steady 25% reduction at either gun tier.
-        shotTimer += 1 / (cannon >= 2 ? 7.5 : 5.625);
+        const volleysPerSecond = cannon >= 2 ? 7.5 : 5.625;
+        shotTimer += 1 / (volleysPerSecond * (g.rapidFireRemaining > 0 ? 2 : 1));
         sound("cannon");
       }
       if (input.missile && p.missiles > 0) {
@@ -828,36 +839,47 @@
       notify("message", "Squadron inbound · attack run");
       sound("radio");
     }
-    function updateSupportPickup() {
+    function updatePickup() {
       const p = g.player;
-      if (!g.supportPickup && g.elapsed >= nextSupport && g.enemies.some(e => e.hp > 0)) {
+      if (!g.pickup && g.elapsed >= nextPickupAt && g.enemies.some(e => e.hp > 0)) {
         const f = forward(p), side = Math.random() < 0.5 ? -64 : 64;
         const x = p.x + f[0] * 560 + Math.cos(p.yaw) * side;
         const z = p.z + f[2] * 560 - Math.sin(p.yaw) * side;
         const y = Math.max(world.height(x, z) + 45, clamp(p.y + f[1] * 360, 45, 2300));
-        g.supportPickup = { x, y, z, expires: g.elapsed + 52 };
-        notify("message", "Fly through the squadron beacon for an attack pass");
+        const kind = pickupKinds[pickupIndex];
+        pickupIndex = (pickupIndex + 1) % pickupKinds.length;
+        g.pickup = { kind, x, y, z, expires: g.elapsed + 52 };
+        notify("message", pickupHints[kind]);
       }
-      const beacon = g.supportPickup;
+      const beacon = g.pickup;
       if (!beacon) return;
       if (g.elapsed >= beacon.expires) {
-        g.supportPickup = null;
-        nextSupport = g.elapsed + 16;
+        g.pickup = null;
+        nextPickupAt = g.elapsed + 16;
         return;
       }
       // The north-up camera steers in the horizontal plane and manages altitude for the pilot.
       const range = g.view === 2 ? Math.hypot(p.x - beacon.x, p.z - beacon.z) : distance(p, beacon);
       if (range > 36) return;
-      const locked = g.lockProgress >= 1 && g.lockTarget?.hp > 0;
-      const target = locked ? g.lockTarget : g.enemies.reduce((near, e) =>
-        e.hp > 0 && (!near || distance(p, e) < distance(p, near)) ? e : near, null);
-      if (!target) return;
-      g.supportPickup = null;
-      nextSupport = g.elapsed + 65 + Math.random() * 25;
-      launchSupport(target);
+      if (beacon.kind === "squadron") {
+        const locked = g.lockProgress >= 1 && g.lockTarget?.hp > 0;
+        const target = locked ? g.lockTarget : g.enemies.reduce((near, e) =>
+          e.hp > 0 && (!near || distance(p, e) < distance(p, near)) ? e : near, null);
+        if (!target) return;
+        launchSupport(target);
+      } else if (beacon.kind === "shield") {
+        p.shield = 100;
+        sound("shield");
+        notify("message", "Shield at 100%");
+      } else if (beacon.kind === "rapid") {
+        g.rapidFireRemaining = rapidFireDuration;
+        sound("rapid");
+        notify("message", "Rapid fire · double cannon rate");
+      }
+      g.pickup = null;
+      nextPickupAt = g.elapsed + 22 + Math.random() * 6;
     }
     function updateAllies(dt) {
-      updateSupportPickup();
       for (const a of g.allies) {
         a.age += dt;
         const dx = Math.sin(a.yaw), dz = Math.cos(a.yaw);
@@ -1138,6 +1160,8 @@
       flight(dt, input);
       enemies(dt);
       targeting(dt);
+      g.rapidFireRemaining = Math.max(0, g.rapidFireRemaining - dt);
+      updatePickup();
       fireWeapons(dt, input);
       updateWisps(dt);
       updateAllies(dt);

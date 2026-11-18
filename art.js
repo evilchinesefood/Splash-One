@@ -922,36 +922,61 @@
     }
     ctx.globalAlpha = 1;
   }
-  const beaconLight = "#97ffdf", beaconDark = "#254957";
-  function drawBeacon(ctx, p, time) {
+  const pickupStyles = {
+    squadron: {
+      label: "SQUADRON", light: "#97ffdf", shade: "#4fbab7", dark: "#254957",
+      rim: [[-0.4,-1],[0.4,-1],[1,-0.4],[1,0.4],[0.4,1],[-0.4,1],[-1,0.4],[-1,-0.4]],
+      symbol: ["0001000","0010100","0000000","0100010","1010101"],
+      radar: ["00100","01010","00000","01010","10001"],
+    },
+    shield: {
+      label: "SHIELD", light: "#e4baff", shade: "#a27ce5", dark: "#31284f",
+      rim: [[-0.96,-0.83],[0,-1],[0.96,-0.83],[0.89,0.18],[0.58,0.64],[0,1],[-0.58,0.64],[-0.89,0.18]],
+      symbol: ["001100","001100","111111","111111","001100","001100"],
+      radar: ["00100","00100","11111","00100","00100"],
+    },
+    rapid: {
+      label: "RAPID FIRE", light: "#ffdc78", shade: "#ff9c4d", dark: "#4b2d33",
+      rim: [[0,-1],[1,0],[0,1],[-1,0]],
+      symbol: ["000111","001110","011100","111111","001110","011100","011000","010000"],
+      radar: ["0011","0110","1111","0110","0100"],
+    },
+  };
+
+  function pickupGlyph(ctx, rows, x, y, scale, color) {
+    ctx.fillStyle = color;
+    const left = Math.round(x - rows[0].length * scale / 2);
+    const top = Math.round(y - rows.length * scale / 2);
+    for (let row = 0; row < rows.length; row++)
+      for (let col = 0; col < rows[row].length; col++)
+        if (rows[row][col] === "1") ctx.fillRect(left + col * scale, top + row * scale, scale, scale);
+  }
+
+  function drawBeacon(ctx, p, time, style) {
     const x = Math.round(p.x), y = Math.round(p.y);
-    // A hollow flight gate leaves the target point visible as the player closes in.
     const radius = clamp(Math.round(p.k * 36), 8, 62);
-    const rim = clamp(Math.round(radius / 10), 1, 3);
-    for (let i = 0; i < 8; i++) {
-      const angle = (i + 0.5) * TAU / 8, next = angle + TAU / 8;
-      const x1 = x + Math.cos(angle) * radius, y1 = y + Math.sin(angle) * radius;
-      const x2 = x + Math.cos(next) * radius, y2 = y + Math.sin(next) * radius;
-      line(ctx, x1 - 1, y1, x2 - 1, y2, beaconDark, rim + 2);
-      line(ctx, x1, y1, x2, y2, i < 4 ? "#4fbab7" : beaconLight, rim);
+    const width = clamp(Math.round(radius / 10), 1, 3);
+    const points = style.rim.map(([dx, dy]) => [x + radius * dx, y + radius * dy]);
+    for (let i = 0; i < points.length; i++) {
+      const [x1, y1] = points[i], [x2, y2] = points[(i + 1) % points.length];
+      line(ctx, x1 - 1, y1 - 1, x2 - 1, y2 - 1, style.dark, width + 2);
+      line(ctx, x1, y1, x2, y2, (y1 + y2) / 2 > y ? style.shade : style.light, width);
     }
-    // Two running lights trace the pickup volume. The three-ship glyph matches the radio call.
-    for (const phase of [0, Math.PI]) {
-      const a = time * 2.4 + phase;
-      disc(ctx, x + Math.cos(a) * radius, y + Math.sin(a) * radius, rim, "#fbffd3");
+    for (const phase of [0, 0.5]) {
+      const t = ((time * 0.38 + phase) % 1) * points.length;
+      const index = Math.floor(t), u = t - index;
+      const [x1, y1] = points[index], [x2, y2] = points[(index + 1) % points.length];
+      disc(ctx, x1 + (x2 - x1) * u, y1 + (y2 - y1) * u, width, "#fff9de");
     }
-    const gap = clamp(Math.round(radius * 0.25), 2, 5);
-    for (const wing of [-1, 0, 1]) {
-      const ax = x + wing * gap * 1.5, ay = y + (wing ? gap : 0) - gap;
-      line(ctx, ax - gap, ay + gap, ax, ay, beaconDark, 2);
-      line(ctx, ax, ay, ax + gap, ay + gap, beaconDark, 2);
-      line(ctx, ax - gap, ay + gap, ax, ay, "#e5ffef");
-      line(ctx, ax, ay, ax + gap, ay + gap, "#e5ffef");
-    }
-    const labelX = clamp(x, 20, ctx.canvas.width - 20), labelY = y - radius - 10;
-    ctx.fillStyle = beaconDark;
-    ctx.fillRect(labelX - 18, labelY - 1, 37, 7);
-    label(ctx, "SQUADRON", labelX, labelY, beaconLight, "center");
+    const scale = clamp(Math.floor(radius / 8), 1, 3);
+    pickupGlyph(ctx, style.symbol, x + 1, y + 1, scale, style.dark);
+    pickupGlyph(ctx, style.symbol, x, y, scale, style.light);
+    const half = style.label.length * 2 + 2;
+    const labelX = clamp(x, half + 1, ctx.canvas.width - half - 1);
+    const labelY = clamp(y - radius - 10, 2, ctx.canvas.height - 7);
+    ctx.fillStyle = style.dark;
+    ctx.fillRect(labelX - half, labelY - 1, half * 2 + 1, 7);
+    label(ctx, style.label, labelX, labelY, style.light, "center");
   }
 
   // Camera-space bearing also works for contacts behind the camera and in north-up view.
@@ -1003,21 +1028,19 @@
       ctx.fillRect(x, y, 1, 1);
       ctx.globalAlpha = 1;
     }
-    const pickup = g.supportPickup;
+    const pickup = g.pickup;
     if (pickup) {
       const p = project(pickup.x, pickup.y, pickup.z);
       const cockpit = g.cockpitBlend > 0.5;
       if (!p || p.x < 15 || p.x > w - 15 || p.y < 20 || p.y > h * (cockpit ? 0.65 : 0.91) ||
           !visible(g, cam, pickup)) {
         const { x, y, dx, dy } = edgeCue(cam, pickup, w, h, cockpit, 13);
-        line(ctx, x, y, x + dx * 7, y + dy * 7, beaconDark, 3);
-        line(ctx, x, y, x + dx * 7, y + dy * 7, beaconLight);
-        const bx = Math.round(x), by = Math.round(y);
-        polygon(ctx, [[bx-5,by],[bx,by-5],[bx+5,by],[bx,by+5]], beaconDark);
-        line(ctx, bx-3, by, bx, by-3, beaconLight);
-        line(ctx, bx, by-3, bx+3, by, beaconLight);
-        line(ctx, bx-2, by+2, bx, by, beaconLight);
-        line(ctx, bx, by, bx+2, by+2, beaconLight);
+        const style = pickupStyles[pickup.kind];
+        line(ctx, x, y, x + dx * 7, y + dy * 7, style.dark, 3);
+        line(ctx, x, y, x + dx * 7, y + dy * 7, style.light);
+        ctx.fillStyle = style.dark;
+        ctx.fillRect(Math.round(x) - 5, Math.round(y) - 5, 11, 11);
+        pickupGlyph(ctx, style.symbol, x, y, 1, style.light);
       }
     }
     const target = g.target || g.lockTarget;
@@ -1363,11 +1386,8 @@
       if (Math.hypot(rx, ry) >= rr - 1) return;
       const x = Math.round(211 + rx), y = Math.round(45 + ry);
       if (kind === "pickup") {
-        c.fillStyle = beaconLight;
-        c.fillRect(x, y - 2, 1, 1);
-        c.fillRect(x - 2, y, 1, 1);
-        c.fillRect(x + 2, y, 1, 1);
-        c.fillRect(x, y + 2, 1, 1);
+        const style = pickupStyles[t.kind];
+        pickupGlyph(c, style.radar, x, y, 1, style.light);
         return;
       }
       c.fillStyle = kind === "ally" ? "#8ff6c6" : "#d0ff94";
@@ -1379,7 +1399,7 @@
     }
     for (const t of g.enemies) plotContact(t, "enemy");
     for (const t of g.allies || []) plotContact(t, "ally");
-    if (g.supportPickup) plotContact(g.supportPickup, "pickup");
+    if (g.pickup) plotContact(g.pickup, "pickup");
     c.fillStyle = "#e5ffda";
     c.fillRect(210, 45, 3, 1);
     c.fillRect(211, 44, 1, 3);
@@ -1586,16 +1606,16 @@
       const a = project(e.x, e.y, e.z);
       if (inScreen(a, 14)) objects.push({ type: "wisp", e, a, d: a.d });
     }
-    if (g.supportPickup) {
-      const e = g.supportPickup, a = project(e.x, e.y, e.z);
-      if (inScreen(a, 65) && visible(g, cam, e)) objects.push({ type: "pickup", a, d: a.d });
+    if (g.pickup) {
+      const e = g.pickup, a = project(e.x, e.y, e.z);
+      if (inScreen(a, 65) && visible(g, cam, e)) objects.push({ type: "pickup", e, a, d: a.d });
     }
     const pp = project(p.x, p.y, p.z);
     if (pp && blend < 0.52) objects.push({ type: "player", e: p, a: pp, d: pp.d });
     objects.sort((a, b) => b.d - a.d);
     for (const { type, e, a } of objects) {
       if (type === "pickup") {
-        drawBeacon(ctx, a, g.time);
+        drawBeacon(ctx, a, g.time, pickupStyles[e.kind]);
         continue;
       }
       if (type === "fx") {
@@ -1671,6 +1691,16 @@
         ctx.globalAlpha = 1;
       }
       cues(ctx, g, cam, project, b);
+      if (g.rapidFireRemaining > 0) {
+        const style = pickupStyles.rapid;
+        const text = "RAPID FIRE " + Math.ceil(g.rapidFireRemaining) + "S";
+        const width = text.length * 4 + 12;
+        const x = w - width - 5, y = Math.round(h * 0.27);
+        ctx.fillStyle = style.dark;
+        ctx.fillRect(x, y, width, 11);
+        pickupGlyph(ctx, style.symbol, x + 5, y + 5, 1, style.light);
+        label(ctx, text, x + 11, y + 3, style.light);
+      }
       if (p.hitFlash > 0.04) {
         const shield = p.shield > 0,
           col = shield ? "#82def3" : "#ff845e";
