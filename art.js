@@ -73,6 +73,59 @@
     }
   }
 
+  // Five-by-seven cockpit type. A slashed zero, open four and wider letterforms
+  // distinguish rapidly changing readings. Prepaint each ink once for the HUD.
+  const cockpitGlyphs = {
+    "0": [14,17,19,21,25,17,14], "1": [4,12,4,4,4,4,14], "2": [14,17,1,2,4,8,31],
+    "3": [30,1,1,14,1,1,30], "4": [2,6,10,18,31,2,2], "5": [31,16,16,30,1,1,30],
+    "6": [6,8,16,30,17,17,14], "7": [31,1,2,4,8,8,8], "8": [14,17,17,14,17,17,14],
+    "9": [14,17,17,15,1,2,12], A: [14,17,17,31,17,17,17], B: [30,17,17,30,17,17,30],
+    C: [14,17,16,16,16,17,14], D: [30,17,17,17,17,17,30], E: [31,16,16,30,16,16,31],
+    F: [31,16,16,30,16,16,16], G: [14,17,16,23,17,17,14], H: [17,17,17,31,17,17,17],
+    I: [14,4,4,4,4,4,14], J: [7,2,2,2,2,18,12], K: [17,18,20,24,20,18,17],
+    L: [16,16,16,16,16,16,31], M: [17,27,21,21,17,17,17], N: [17,25,25,21,19,19,17],
+    O: [14,17,17,17,17,17,14], P: [30,17,17,30,16,16,16], Q: [14,17,17,17,21,18,13],
+    R: [30,17,17,30,20,18,17], S: [15,16,16,14,1,1,30], T: [31,4,4,4,4,4,4],
+    U: [17,17,17,17,17,17,14], V: [17,17,17,17,17,10,4], W: [17,17,17,21,21,27,17],
+    X: [17,17,10,4,10,17,17], Y: [17,17,10,4,4,4,4], Z: [31,1,2,4,8,16,31],
+    ".": [0,0,0,0,0,0,4], ":": [0,0,4,0,0,4,0], "-": [0,0,0,14,0,0,0],
+  };
+  const cockpitInks = new Map();
+  const typeWidth = (text, scale = 1) => (String(text).length * 6 - 1) * scale;
+  function cockpitType(ctx, text, x, y, color, align = "center", scale = 1) {
+    let sheet = cockpitInks.get(color);
+    if (!sheet) {
+      sheet = document.createElement("canvas");
+      sheet.width = 6 * 96;
+      sheet.height = 7;
+      const ink = sheet.getContext("2d");
+      ink.fillStyle = color;
+      for (const [character, rows] of Object.entries(cockpitGlyphs)) {
+        const left = (character.charCodeAt(0) - 32) * 6;
+        rows.forEach((bits, row) => {
+          for (let col = 0; col < 5; col++)
+            if (bits & (16 >> col)) ink.fillRect(left + col, row, 1, 1);
+        });
+      }
+      cockpitInks.set(color, sheet);
+    }
+    text = String(text);
+    const width = typeWidth(text, scale);
+    x = Math.round(x - (align === "right" ? width : align === "center" ? width / 2 : 0));
+    y = Math.round(y);
+    for (const character of text) {
+      ctx.drawImage(sheet, (character.charCodeAt(0) - 32) * 6, 0, 5, 7, x, y, 5 * scale, 7 * scale);
+      x += 6 * scale;
+    }
+  }
+
+  function cockpitPlate(ctx, text, x, y, color, backing = "#1d3938") {
+    const width = typeWidth(text);
+    ctx.fillStyle = backing;
+    ctx.fillRect(Math.round(x - width / 2) - 2, Math.round(y) - 1, width + 4, 9);
+    cockpitType(ctx, text, x, y, color);
+  }
+
   function line(ctx, x0, y0, x1, y1, color, width = 1) {
     if (![x0, y0, x1, y1].every(Number.isFinite)) return;
     // Clip before rasterizing so a near-plane crossing cannot create a long pixel loop.
@@ -334,6 +387,60 @@
   const jetMesh = buildJet(),
     rivalMesh = buildJet(enemyMetal, red),
     friendlyMesh = buildJet(steel, azure, azure[3]);
+  const ivory = ["#596473", "#909da6", "#c3cdcb", "#eeeee0"];
+  const copper = ["#57404c", "#945149", "#d7784d", "#ffbd79"];
+  const ionGlass = ["#234553", "#33768b", "#50b9c0", "#aff6de"];
+  const wingStores = jetMesh.filter(face => face.flags.startsWith("rail"));
+  const needleNozzle = { x: 0, y: 0, z: -10, width: 1.17, height: 0.95 };
+  const mantaNozzle = { x: 4.3, y: 0.25, z: -8.5, width: 1.15, height: 0.73 };
+
+  function buildNeedle() {
+    const mesh = [];
+    loft(mesh, [[-10,0,0,1.25,1],[-4,0,0,1.7,1.25],[5,0,0,1.12,.9],
+      [10,0,0,.58,.4],[14,0,.1,.08,.12]], ivory);
+    loft(mesh, [[.7,0,.8,.7,.12],[2.1,0,1,.95,.94],[5,0,.91,.65,.56],[7,0,.65,.17,.08]], ionGlass);
+    for (const side of [-1, 1]) {
+      const v = (x,y,z) => [side*x,y,z];
+      surface(mesh, [v(.85,0,4),v(6.8,-.15,-6.4),v(6.1,-.1,-8),v(1.1,.05,-5.2)], ivory[2]);
+      surface(mesh, [v(1.7,.12,1.4),v(6.45,0,-6.4),v(5.55,.08,-6.9),v(1.15,.15,-2)], ionGlass[2]);
+      surface(mesh, [v(.7,.15,8.2),v(3,.38,5.4),v(2.6,.2,4.9),v(.9,.17,6)], ivory[3]);
+      surface(mesh, [v(.6,.18,-4.6),v(2.55,.7,-9.1),v(1.45,.62,-9.8),v(.55,.33,-8.5)], ionGlass[2]);
+    }
+    surface(mesh, [[0,.9,-2.7],[0,5.7,-8.5],[0,5.5,-9.4],[0,1.05,-8.6]], ivory[1]);
+    surface(mesh, [[0,4.9,-7.55],[0,5.7,-8.5],[0,5.5,-9.4],[0,4.7,-9.15]], ionGlass[2]);
+    // The interceptor's narrow swept wings carry their rails closer in and farther aft.
+    const stores = wingStores.map(face => ({
+      ...face, points: face.points.map(([x, y, z]) => [x * .72, y, z - 2.8]),
+    }));
+    return mesh.concat(stores);
+  }
+
+  function buildManta() {
+    const mesh = [];
+    loft(mesh,[[-7,0,0,2.65,1.03],[-2,0,.2,3.1,1.65],[3.5,0,.22,2,1.2],[8,0,0,.3,.28]], copper);
+    loft(mesh,[[-1.1,0,1.45,1.2,.2],[1.2,0,1.68,1.55,.9],[4.65,0,1.2,.6,.22]], night);
+    for (const side of [-1, 1]) {
+      const v = (x,y,z) => [side*x,y,z];
+      surface(mesh,[v(1,.65,6.3),v(13.5,-.1,-4.8),v(12.6,.04,-7.25),v(7.7,.2,-5.9),
+        v(4.8,.25,-9.5),v(1.4,.6,-5.8)],copper[2]);
+      surface(mesh,[v(1.7,.72,5.45),v(12.7,.05,-4.85),v(9.5,.24,-4.15),v(4.2,.6,.5)],copper[3]);
+      surface(mesh,[v(6.2,.4,-2.3),v(12.3,.07,-5.1),v(12.5,.12,-6.4),v(7.9,.35,-4.3)],night[1]);
+      loft(mesh,[[-8.5,side*4.3,.25,1.3,.9],[-4,side*4.3,.55,1.65,1.2],
+        [1.8,side*4.3,.56,1.1,.75],[2.4,side*4.3,.55,.97,.62]],slate);
+      surface(mesh,[v(4,.92,-3),v(6.25,3.2,-7.8),v(5.97,2.8,-9.5),v(4,1,-8)],copper[1]);
+      surface(mesh,[v(5.7,2.7,-6.85),v(6.25,3.2,-7.8),v(5.97,2.8,-9.5),v(5.67,2.5,-8.1)],ivory[2]);
+    }
+    return mesh.concat(wingStores);
+  }
+  const playerModels = {
+    kestrel: {mesh:jetMesh, nozzle:jetNozzle},
+    needle: {mesh:buildNeedle(), nozzle:needleNozzle,
+      shadow:[[0,14],[1,8],[3,5],[1.5,4],[6.8,-6.4],[6.1,-8],[1.5,-5.5],[2.5,-9.1],[0,-10],
+        [-2.5,-9.1],[-1.5,-5.5],[-6.1,-8],[-6.8,-6.4],[-1.5,4],[-3,5],[-1,8]]},
+    manta: {mesh:buildManta(), nozzle:mantaNozzle,
+      shadow:[[0,8],[13.5,-4.8],[12.6,-7.25],[7.7,-5.9],[4.8,-9.5],[1.5,-7],[-1.5,-7],
+        [-4.8,-9.5],[-7.7,-5.9],[-12.6,-7.25],[-13.5,-4.8]]},
+  };
   function buildCrescent() {
     const mesh = [];
     for (const s of [-1, 1]) {
@@ -662,9 +769,10 @@
       histories.set(e, s);
     }
     if (g.time - s.t > 0.046) {
+      const tip = e.frame?.tip ?? 8.65, z = e.frame?.tipZ ?? -4.2;
       s.samples.push({
         t: g.time,
-        tip: [transform(e, b, [-8.65, -0.23, -4.2]), transform(e, b, [8.65, -0.23, -4.2])],
+        tip: [transform(e, b, [-tip, -0.23, z]), transform(e, b, [tip, -0.23, z])],
         x: e.x,
         z: e.z,
         water: e === g.player && e.y < 12 && g.world.height(e.x, e.z) < 0.1,
@@ -719,7 +827,7 @@
   // nozzle lip, fins and fuselage, including when the jet rolls toward the camera.
   function exhaustMesh(nozzle, time, boost) {
     const faces = [];
-    for (const side of [-1, 1]) {
+    for (const side of nozzle.x === 0 ? [0] : [-1, 1]) {
       const flicker = 1 + 0.1 * Math.sin(time * 31 + side);
       const length = nozzle.width * (boost ? 9 : 2.4) * flicker;
       const x = side * nozzle.x;
@@ -761,7 +869,7 @@
       c = top ? top(cx, cz, g.time) : null;
       y = Math.max(0, h(cx, cz), Number.isFinite(c) && c < e.y ? c : -Infinity);
     }
-    const silhouette = [
+    const silhouette = playerModels[e.frame.id].shadow || [
       [0, 11.5],
       [2.2, 3.5],
       [8.9, -3.5],
@@ -800,7 +908,7 @@
     return true;
   }
   function nightLights(ctx, e, b, project, time) {
-    const tip = e.kind === "carrier" ? [53, 0, -26] : e.kind === "bomber" ? [23.6, -.4, -6.8]
+    const tip = e.frame ? [e.frame.tip, -.2, e.frame.tipZ] : e.kind === "carrier" ? [53, 0, -26] : e.kind === "bomber" ? [23.6, -.4, -6.8]
       : e.kind === "dart" ? [6.3, -.1, -7.7] : e.kind === "crescent" ? [9.2, 0, -4.5] : [8.7, -.2, -3.8];
     for (const sign of [-1,1]) {
       const pt = project(...transform(e,b,[sign * tip[0], tip[1], tip[2]]));
@@ -868,6 +976,13 @@
       line(ctx,end.x,end.y,p.x,p.y,outer);
       disc(ctx,p.x,p.y,r,outer);
       disc(ctx,p.x,p.y,r*.4,ember?"#fff8bc":"#fff0ff");
+      return;
+    }
+    if (s.style === "needle" || s.style === "manta") {
+      const ion = s.style === "needle", halo = ion ? "#52e3e5" : "#f79a53";
+      const width = clamp(Math.round(p.k * (ion ? 1.2 : .7)), 2, 5);
+      line(ctx, end.x, end.y, p.x, p.y, halo, width);
+      line(ctx, (end.x + p.x) / 2, (end.y + p.y) / 2, p.x, p.y, ion ? "#d8ffff" : "#fff0a0", 1);
       return;
     }
     if (missile) {
@@ -1144,7 +1259,11 @@
       corners(ctx, p.x, p.y, r, col);
       if (g.lockProgress >= 0.99) {
         const name = contactNames[t.kind];
-        label(ctx,name ? "LOCK " + name : "LOCK",p.x,p.y-r-8,col,"center");
+        const text = name ? "LOCK " + name : "LOCK";
+        if (g.cockpitBlend > 0.5) {
+          const margin = typeWidth(text) / 2 + 3;
+          cockpitPlate(ctx, text, clamp(p.x, margin, w - margin), Math.max(2, p.y - r - 11), col);
+        } else label(ctx, text, p.x, p.y - r - 8, col, "center");
       }
     }
   }
@@ -1156,7 +1275,7 @@
       cx = w / 2,
       cy = h / 2;
     const yaw = Math.atan2(cam.forward[0], cam.forward[2]),
-      col = "#a2f8d6";
+      col = "#c0ffdf", glass = "#1d3938";
     const dir = (a, p) =>
       project(
         cam.x + 2000 * Math.sin(a) * Math.cos(p),
@@ -1164,7 +1283,7 @@
         cam.z + 2000 * Math.cos(a) * Math.cos(p),
       );
     const heading = ((yaw * 180) / Math.PI + 360) % 360,
-      top = h * 0.2;
+      top = h * (w < h ? 0.32 : 0.2);
     ctx.save();
     ctx.beginPath();
     ctx.rect(cx - w * 0.22, h * 0.27, w * 0.44, h * 0.4);
@@ -1188,7 +1307,7 @@
           line(ctx, p.x + dx * r, p.y + dy * r, p.x + dx * r - dy * 3 * s, p.y + dy * r + dx * 3 * s, col);
         }
       }
-      if (a !== 0 && w > 280) label(ctx, Math.abs(a), p.x + dx * (arm + 4), p.y + dy * (arm + 4) - 2, col);
+      if (a !== 0 && w > 280) cockpitPlate(ctx, String(a), p.x + dx * (arm + 12), p.y + dy * (arm + 12) - 3, col);
     }
     ctx.restore();
     const range = Math.min(67, w * 0.18);
@@ -1196,7 +1315,7 @@
       const x = cx + (a - heading) * 2.65;
       if (Math.abs(x - cx) > range) continue;
       line(ctx, x, top, x, top + (a % 10 === 0 ? 4 : 2), col);
-      if (a % 10 === 0) label(ctx, String((a + 360) % 360).padStart(3, "0"), x, top - 7, col, "center");
+      if (a % 10 === 0) cockpitPlate(ctx, String((a + 360) % 360).padStart(3, "0"), x, top - 10, col);
     }
     polygon(
       ctx,
@@ -1207,25 +1326,26 @@
       ],
       amber,
     );
-    const atX = clamp(w * 0.19, 49, 98),
-      fy = cy + 7;
-    function tape(x, str, sub) {
-      const width = 4 * str.length + 6;
-      ctx.fillStyle = "rgba(29,48,52,.60)";
-      ctx.fillRect(Math.round(x - width / 2), Math.round(fy) - 3, width, 10);
-      line(ctx, x - width / 2, fy - 3, x - width / 2, fy + 6, col);
-      line(ctx, x + width / 2, fy - 3, x + width / 2, fy + 6, col);
-      label(ctx, str, x, fy - 1, col, "center");
-      label(ctx, sub, x, fy + 10, col, "center");
+    const atX = Math.min(w * (cam.cockpitSpace ? 0.115 : 0.235), 110), fy = Math.round(cy - 3);
+    const primaryScale = w >= 202 ? 2 : 1;
+    function tape(x, value, unit, secondary) {
+      const width = Math.max(typeWidth(value, primaryScale), typeWidth(secondary), typeWidth(unit)) + 6;
+      const left = Math.round(x - width / 2), height = primaryScale * 7 + 12;
+      ctx.fillStyle = glass;
+      ctx.fillRect(left, fy, width, height);
+      ctx.fillStyle = "#86c9ad";
+      ctx.fillRect(left, fy, 1, height);
+      ctx.fillRect(left + width - 1, fy, 1, height);
+      cockpitType(ctx, value, x, fy + 2, "#e9fff0", "center", primaryScale);
+      cockpitType(ctx, unit, x, fy + 7 * primaryScale + 4, col);
+      cockpitPlate(ctx, secondary, x, fy + height + 3, col);
     }
-    tape(cx - atX, String(Math.round(e.speed * 1.94384)), "KTS");
-    tape(cx + atX, String(Math.round(e.y * 3.28084)), "FT");
     const agl = Math.max(0, e.y - Math.max(0, g.world.height(e.x, e.z)));
-    label(ctx, (e.gForce || 1).toFixed(1) + " G", cx - atX, fy + 22, col, "center");
-    label(ctx, "R " + Math.round(agl * 3.28084), cx + atX, fy + 22, col, "center");
-    label(ctx, "MSL " + e.missiles, cx, cy + h * 0.12, col, "center");
+    tape(cx - atX, Math.round(e.speed * 1.94384), "KTS", (e.gForce || 1).toFixed(1) + " G");
+    tape(cx + atX, Math.round(e.y * 3.28084), "FT", "R " + Math.round(agl * 3.28084));
+    cockpitPlate(ctx, "MSL " + e.missiles, cx, cy + h * 0.12, col);
     const warning = g.terrainWarning ? "PULL UP" : e.hull < 40 ? "HULL" : e.shield < 20 ? "SHIELD" : "";
-    if (warning && Math.sin(g.time * 9) > -0.25) label(ctx, warning, cx, cy - h * 0.1, "#ffc178", "center");
+    if (warning && Math.sin(g.time * 9) > -0.25) cockpitPlate(ctx, warning, cx, cy - h * 0.1, "#ffd59d");
   }
 
   let panelCanvas,
@@ -1236,6 +1356,19 @@
     const e = g.player,
       w = ctx.canvas.width,
       h = ctx.canvas.height;
+    // Small windshield braces remain peripheral so the open sky dominates the view.
+    const leftEdge = thumbSpace ? w * thumbSpace[0] : 0;
+    const rightEdge = thumbSpace ? w * thumbSpace[1] : w;
+    const displayWidth = rightEdge - leftEdge;
+    // In short landscape the flight instruments occupy the gap between the two thumbs.
+    // Crop the console to airspeed, attitude, altitude, radar and vertical speed on narrow phones.
+    const compact = displayWidth < 350;
+    const sourceX = displayWidth < 155 ? 141 : compact ? 60 : 0;
+    const sourceWidth = displayWidth < 155 ? 101 : compact ? 220 : 420;
+    const scale = Math.min(displayWidth / sourceWidth, Math.max(.62, h / 330) * 1.22);
+    const pw = sourceWidth * scale, ph = 88 * scale;
+    const center = (leftEdge + rightEdge) / 2;
+    const x = center - pw / 2, y = h - ph - 5;
     if (!panelCanvas) {
       panelCanvas = document.createElement("canvas");
       panelCanvas.width = 420;
@@ -1252,6 +1385,12 @@
       lamp: "#ffa56c",
     };
     const cream = palette.tick;
+    // Composite labels after scaling the dial art. Each stroke retains one full
+    // screen pixel even on a narrow phone or a reduced-resolution renderer.
+    const captions = [];
+    function caption(text, cx, cy, color = "#f1f3dd", inset = false) {
+      if (cx >= sourceX && cx < sourceX + sourceWidth) captions.push([text, cx, cy, color, inset]);
+    }
     function panelShape(points, col) {
       polygon(c, points, col);
     }
@@ -1266,7 +1405,7 @@
       disc(c, x, y, r + 1, "#87918a");
       disc(c, x, y, r, "#48505a");
       disc(c, x, y, r - 2, palette.dial);
-      label(c, name, x, y + r + 4, cream, "center");
+      caption(name, x, y + r + 7);
     }
     function ticks(x, y, r) {
       for (let j = 0; j <= 10; j++) {
@@ -1367,7 +1506,7 @@
       bolt(x, 77);
     }
     // Throttle gate, lever, and position detents.
-    label(c, "THR", 29, 39, cream, "center");
+    caption("THR", 29, 41);
     c.fillStyle = dark;
     c.fillRect(25, 48, 6, 27);
     for (let j = 0; j < 5; j++) line(c, 18, 50 + j * 5, 21, 50 + j * 5, cream);
@@ -1377,10 +1516,10 @@
     c.fillRect(21, leverY - 2, 15, 6);
     c.fillStyle = amber;
     c.fillRect(22, leverY - 2, 13, 2);
-    gauge(84, 46, 17, "AIRSPEED");
+    gauge(84, 46, 17, "KTS");
     ticks(84, 46, 14);
     needle(84, 46, 11, (e.speed * 1.94384) / 420);
-    label(c, Math.round(e.speed * 1.94384), 84, 54, cream, "center");
+    caption(Math.round(e.speed * 1.94384), 84, 55, "#fff7d4", true);
     gauge(123, 46, 17, "ATT");
     const pitch = e.pitch,
       bank = e.bank + e.roll,
@@ -1402,9 +1541,9 @@
     needle(164, 46, 11, ((e.y * 3.28084) % 1000) / 1000);
     c.fillStyle = "#162532";
     c.fillRect(153, 51, 23, 8);
-    label(c, String(Math.round(e.y * 3.28084)).padStart(4, "0"), 164, 53, cream, "center");
+    caption(String(Math.round(e.y * 3.28084)).padStart(4, "0"), 164, 55, "#fff7d4", true);
     // Moving map, sweep arm and actual contacts share a ~2.2 km radar range.
-    gauge(211, 45, 23, "GROUND RADAR");
+    gauge(211, 45, 23, "RADAR");
     const rr = 19;
     if (!radarCanvas) {
       radarCanvas = document.createElement("canvas");
@@ -1466,7 +1605,7 @@
     gauge(257, 46, 17, "VSI");
     ticks(257, 46, 14);
     needle(257, 46, 11, 0.5 + (e.vy || 0) / 125);
-    label(c, Math.round(((e.vy || 0) * 196.85) / 100), 257, 54, cream, "center");
+    caption(Math.round(((e.vy || 0) * 196.85) / 100), 257, 55, "#fff7d4", true);
     // Turn-and-slip indicator and paired engine power tapes.
     gauge(297, 46, 16, "TURN");
     const tilt = clamp(e.bank || 0, -1, 1);
@@ -1474,7 +1613,7 @@
     line(c, 297, 43, 297, 48, cream);
     line(c, 287, 52, 307, 52, "#849497");
     disc(c, 297 + tilt * 7, 52, 2, "#222b37");
-    label(c, "ENGINE", 336, 30, cream, "center");
+    caption("ENG", 336, 32);
     for (let k = 0; k < 2; k++) {
       const x = 327 + k * 11;
       c.fillStyle = "#26313b";
@@ -1484,13 +1623,13 @@
         c.fillStyle = j / 8 > pct ? "#3b454e" : j > 5 ? "#ffc276" : "#9db497";
         c.fillRect(x + 1, 58 - j * 2.5, 5, 1.6);
       }
-      label(c, String(k + 1), x + 3, 64, cream, "center");
+      caption(String(k + 1), x + 3, 67);
     }
     const now = new Date(),
       clock = [now.getHours(), now.getMinutes()].map((v) => String(v).padStart(2, "0")).join(":");
     c.fillStyle = palette.dial;
     c.fillRect(365, 42, 28, 11);
-    label(c, clock, 379, 45, amber, "center");
+    caption(clock, 379, 47, amber, true);
     const lamps = [
       ["SHD", e.shield < 20],
       ["HUL", e.hull < 40],
@@ -1498,22 +1637,9 @@
     ];
     lamps.forEach(([text, on], j) => {
       c.fillStyle = on ? "#b85d47" : "#3e444c";
-      c.fillRect(362 + j * 13, 58, 12, 10);
-      label(c, text, 368 + j * 13, 61, on ? "#fff2b8" : "#9b9f96", "center");
+      c.fillRect(352 + j * 22, 57, 21, 12);
+      caption(text, 362 + j * 22, 63, on ? "#fff2b8" : "#c4c9c3");
     });
-    // Small windshield braces remain peripheral so the open sky dominates the view.
-    const leftEdge = thumbSpace ? w * thumbSpace[0] : 0;
-    const rightEdge = thumbSpace ? w * thumbSpace[1] : w;
-    const displayWidth = rightEdge - leftEdge;
-    // In short landscape the flight instruments occupy the gap between the two thumbs.
-    // Crop the console to airspeed, attitude, altitude, radar and vertical speed on narrow phones.
-    const compact = thumbSpace && displayWidth < 315;
-    const sourceX = compact ? 60 : 0;
-    const sourceWidth = compact ? 220 : 420;
-    const scale = Math.min(thumbSpace ? displayWidth / sourceWidth : w / 357, Math.max(.62, h / 330) * 1.22);
-    const pw = sourceWidth * scale, ph = 88 * scale;
-    const center = (leftEdge + rightEdge) / 2;
-    const x = center - pw / 2, y = h - ph - 5;
     polygon(
       ctx,
       [
@@ -1602,23 +1728,34 @@
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(panelCanvas, sourceX, 0, sourceWidth, 88, Math.round(x), Math.round(y), Math.ceil(pw), Math.ceil(ph));
 
+    for (const [text, cx, cy, color, inset] of captions) {
+      const px = Math.round(x + (cx - sourceX) * scale), py = Math.round(y + cy * scale) - 3;
+      if (inset) {
+        const width = typeWidth(text);
+        ctx.fillStyle = "#162631";
+        ctx.fillRect(Math.round(px - width / 2) - 1, py - 1, width + 2, 9);
+      }
+      cockpitType(ctx, text, px, py, color);
+    }
+
     // Paint this readout at the canvas pixel pitch so the numbers survive
     // narrow screens and adaptive resolution. It sits on the glare shield.
-    const readoutWidth = 116;
-    const left = Math.round(center - readoutWidth / 2), top = Math.round(y + 14 * scale - 14);
+    const readoutWidth = Math.min(144, Math.floor(displayWidth) - 2);
+    const left = Math.round(center - readoutWidth / 2), top = Math.round(y + 14 * scale - 17);
     ctx.fillStyle = "#87918a";
-    ctx.fillRect(left - 1, top - 1, readoutWidth + 2, 17);
+    ctx.fillRect(left - 1, top - 1, readoutWidth + 2, 19);
     ctx.fillStyle = "#202d37";
-    ctx.fillRect(left, top, readoutWidth, 15);
+    ctx.fillRect(left, top, readoutWidth, 17);
     const readouts = [["SHIELD", e.shield, "#8dd7da"], ["HULL", e.hull, "#f7b181"]];
     readouts.forEach(([name, value, color], i) => {
-      const x = left + 4 + i * 57;
-      label(ctx, name, x, top + 2, cream);
-      label(ctx, Math.round(value), x + 49, top + 2, color, "right");
+      const width = Math.floor(readoutWidth / 2) - 8, x = left + 4 + i * Math.floor(readoutWidth / 2);
+      const caption = width < 55 ? (i === 0 ? "SHD" : "HUL") : name;
+      cockpitType(ctx, caption, x, top + 2, "#e9f0df", "left");
+      cockpitType(ctx, Math.round(value), x + width, top + 2, color, "right");
       ctx.fillStyle = "#48535b";
-      ctx.fillRect(x, top + 9, 49, 3);
+      ctx.fillRect(x, top + 11, width, 4);
       ctx.fillStyle = color;
-      ctx.fillRect(x, top + 9, Math.round(49 * saturate(value / 100)), 3);
+      ctx.fillRect(x, top + 11, Math.round(width * saturate(value / 100)), 4);
     });
   }
 
@@ -1707,7 +1844,8 @@
         ctx.save();
         boostVibration(ctx, g);
         ctx.globalAlpha = 1 - saturate((blend - 0.12) / 0.4);
-        drawMesh(ctx, e, jetMesh.concat(exhaustMesh(jetNozzle, g.time, e.boost)), b, project, e.missiles, g.world.night);
+        const model = playerModels[e.frame.id];
+        drawMesh(ctx, e, model.mesh.concat(exhaustMesh(model.nozzle, g.time, e.boost)), b, project, e.missiles, g.world.night);
         if (g.world.night) nightLights(ctx,e,b,project,g.time);
         ctx.restore();
         continue;
@@ -1761,12 +1899,14 @@
       if (g.rapidFireRemaining > 0) {
         const style = pickupStyles.rapid;
         const text = "RAPID FIRE " + Math.ceil(g.rapidFireRemaining) + "S";
-        const width = text.length * 4 + 12;
+        const cockpit = blend > 0.5;
+        const width = (cockpit ? typeWidth(text) : text.length * 4) + 13;
         const x = w - width - 5, y = Math.round(h * 0.27);
         ctx.fillStyle = style.dark;
         ctx.fillRect(x, y, width, 11);
         pickupGlyph(ctx, style.symbol, x + 5, y + 5, 1, style.light);
-        label(ctx, text, x + 11, y + 3, style.light);
+        if (cockpit) cockpitType(ctx, text, x + 11, y + 2, style.light, "left");
+        else label(ctx, text, x + 11, y + 3, style.light);
       }
       if (p.hitFlash > 0.04) {
         const shield = p.shield > 0,

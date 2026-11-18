@@ -21,7 +21,7 @@
     <main id="stage" aria-label="Patrol fighter jet game">
       <canvas id="world" aria-hidden="true"></canvas><canvas id="art" aria-hidden="true"></canvas>
       <div id="shade"></div>
-      <button id="pause" type="button" hidden title="Pause (Esc)">Ⅱ Pause</button>
+      <button id="pause" type="button" hidden title="Pause and release mouse (Esc or P)">Ⅱ Pause</button>
       <section id="home" aria-label="Start patrol">
         <h1 aria-label="Patrol">
           <canvas id="wordmark" width="200" height="42" aria-hidden="true"></canvas>
@@ -30,6 +30,16 @@
           <span id="regionIntro">Fly among island forests and mountain lakes.</span><br />Build your jet for the
           carrier showdown.
         </p>
+        <div class="airframe-settings">
+          <label class="deck-setting" for="airframePick">Aircraft
+            <select id="airframePick" aria-describedby="airframeSummary"></select>
+          </label>
+          <div id="airframeSummary" aria-live="polite">
+            <strong id="airframeWeapon"></strong>
+            <span id="airframeDetail"></span>
+          </div>
+          <div id="airframeStats"></div>
+        </div>
         <div class="route-settings">
           <label class="deck-setting" for="regionPick"
             >Region
@@ -93,7 +103,15 @@
                 <h3>Equipment</h3>
                 <span id="pilotLevel"></span>
               </div>
-              <ul id="loadout"></ul>
+              <ul id="weapons" class="loadout-grid" aria-label="Weapons"></ul>
+              <div id="patrolEquipment" hidden>
+                <h4>Patrol upgrades</h4>
+                <ul id="loadout" class="loadout-grid"></ul>
+              </div>
+              <div id="hangarEquipment" hidden>
+                <h4>Installed hangar parts</h4>
+                <ul id="installedParts" class="loadout-grid"></ul>
+              </div>
             </section>
             <section class="pause-card mix">
               <h3>Audio</h3>
@@ -118,7 +136,7 @@
                   <dd>Mouse</dd>
                 </div>
                 <div>
-                  <dt>Fire cannon</dt>
+                  <dt>Fire <span id="controlPrimary">pulse cannon</span></dt>
                   <dd>Left click</dd>
                 </div>
                 <div>
@@ -143,12 +161,15 @@
                 </div>
                 <div>
                   <dt>Pause / resume</dt>
-                  <dd>Esc</dd>
+                  <dd>Esc / P</dd>
                 </div>
               </dl>
+              <label class="capture-setting" id="captureSetting" hidden>
+                <input id="captureMouse" type="checkbox" checked /> Keep mouse inside game
+              </label>
               <ul class="touch-guide">
                 <li><b>Steer</b> with the left stick.</li>
-                <li><b>Hold Cannon.</b> Slide onto Missile to fire both.</li>
+                <li><b>Hold <span id="touchPrimaryHint">Cannon</span>.</b> Slide onto Missile to fire both.</li>
                 <li><b>Hold</b> Boost or Brake. <b>Tap</b> Roll to evade.</li>
                 <li><b>Tap the camera name</b> to change views.</li>
               </ul>

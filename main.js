@@ -85,6 +85,49 @@ const patrol = (() => {
   let stickId = null, touchMode = coarse.matches;
   document.body.classList.toggle("touch-active", touchMode);
 
+  const stage = $("stage"), captureMouse = $("captureMouse");
+  const canLockMouse = typeof stage.requestPointerLock === "function";
+  let lockPending = false, hadMouseLock = false, lockHintShown = false;
+  $("captureSetting").hidden = !canLockMouse;
+  try { captureMouse.checked = localStorage.getItem("patrol.captureMouse") !== "off"; } catch {}
+  captureMouse.onchange = () => {
+    try { localStorage.setItem("patrol.captureMouse", captureMouse.checked ? "on" : "off"); } catch {}
+  };
+
+  function captureFailed() {
+    lockPending = false;
+    if (active() && !lockHintShown) {
+      lockHintShown = true;
+      toast("Mouse is free · click the flight view to capture");
+    }
+  }
+  function captureFlightMouse() {
+    if (!active() || touchMode || !captureMouse.checked || !canLockMouse ||
+        document.pointerLockElement || lockPending) return;
+    lockPending = true;
+    try {
+      // Older browsers report completion through events without returning a promise.
+      stage.requestPointerLock()?.catch(captureFailed);
+    } catch { captureFailed(); }
+  }
+  function releaseFlightMouse() {
+    if (document.pointerLockElement === stage) document.exitPointerLock();
+  }
+  document.addEventListener("pointerlockerror", captureFailed);
+  document.addEventListener("pointerlockchange", () => {
+    lockPending = false;
+    const locked = document.pointerLockElement === stage;
+    const released = hadMouseLock && !locked;
+    hadMouseLock = locked;
+    $("pause").textContent = locked ? "Ⅱ Pause · P" : "Ⅱ Pause";
+    if (locked) {
+      lockHintShown = false;
+      if (!active() || touchMode) releaseFlightMouse();
+    } else if (released && active() && !touchMode) {
+      pause();
+    }
+  });
+
   function refreshHeldActions() {
     for (const key of ["fire", "brake", "boost"]) input[key] = desktopHeld[key];
     for (const { key } of contacts.values()) {
@@ -111,6 +154,7 @@ const patrol = (() => {
     releaseTouches();
     input.x = input.y = 0;
     touchMode = on;
+    if (on) releaseFlightMouse();
     document.body.classList.toggle("touch-active", on);
     $("touch").hidden = !active() || !on;
   }
@@ -391,6 +435,29 @@ const patrol = (() => {
     $("earnedBreakdown").textContent = lines.join("  ·  ");
     settlement = PatrolHangar.deposit(g, bill).then(refreshWallet);
   }
+  const airframePick = $("airframePick");
+  for (const frame of Object.values(PatrolGame.airframes))
+    airframePick.add(new Option(frame.name, frame.id));
+  try {
+    const saved = localStorage.getItem("patrol.airframe");
+    if (Object.hasOwn(PatrolGame.airframes, saved)) airframePick.value = saved;
+  } catch { /* Keep the selection in memory when storage is unavailable. */ }
+  function previewAirframe() {
+    const frame = PatrolGame.airframes[airframePick.value];
+    $("airframeWeapon").textContent = frame.weapon;
+    $("controlPrimary").textContent = frame.weapon.toLowerCase();
+    $("touchPrimaryHint").textContent = frame.trigger;
+    document.querySelector('[data-control="fire"]').textContent = frame.trigger;
+    $("airframeDetail").textContent = frame.description;
+    $("airframeStats").textContent = "Cruise " + Math.round(frame.cruise * 1.94384) + " kt  ·  Turn " +
+      Math.round(frame.handling * 1.5 * 180 / Math.PI) + "°/s  ·  Armor " + Math.round(frame.armor * 100) + "%";
+    if (g?.state === "title") g.player.frame = frame;
+  }
+  airframePick.onchange = () => {
+    previewAirframe();
+    try { localStorage.setItem("patrol.airframe", airframePick.value); } catch { /* Session only. */ }
+  };
+  previewAirframe();
   function start() {
     if (loadingMap) return;
     if (!world) {
@@ -402,7 +469,7 @@ const patrol = (() => {
     transition = null;
     paused = false;
     unlockSound();
-    g.start(minutes, PatrolHangar.read().ranks);
+    g.start(minutes, PatrolHangar.read().ranks, airframePick.value);
     g.view = 0;
     carry = 0;
     lastPanel = "";
@@ -429,6 +496,7 @@ const patrol = (() => {
   function flightDeck() {
     clearInput();
     g = PatrolGame.create(world, notify);
+    previewAirframe();
     g.view = view = 0;
     paused = false;
     transition = lastCam = null;
@@ -438,6 +506,35 @@ const patrol = (() => {
   }
   function pilotLevel() {
     return 1 + g.loadout.reduce((sum, item) => sum + item.level, 0);
+  }
+  function equipmentCard(icon, name, info) {
+    const row = document.createElement("li");
+    const text = document.createElement("div");
+    const label = document.createElement("small");
+    const title = document.createElement("strong");
+    label.textContent = info;
+    title.textContent = name;
+    text.append(label, title);
+    row.append(PatrolUpgrades.icon(icon, 56), text);
+    return row;
+  }
+  function showEquipment() {
+    const frame = g.player.frame;
+    const primaryIcon = { needle: "arc", manta: "salvo" }[frame?.id] || "cannon";
+    $("pilotLevel").textContent = "Pilot level " + pilotLevel();
+    $("weapons").replaceChildren(
+      equipmentCard(primaryIcon, frame?.weapon || "Pulse cannon", "Primary"),
+      equipmentCard("missiles", "Lock-on missiles", "Secondary"),
+    );
+    const upgrades = g.loadout;
+    $("patrolEquipment").hidden = !upgrades.length;
+    $("loadout").replaceChildren(...upgrades.map(item =>
+      equipmentCard(item.id, item.name, "Rank " + item.level)));
+    const parts = PatrolHangar.parts.filter(part => g.mods[part.id] > 0);
+    $("hangarEquipment").hidden = !parts.length;
+    $("installedParts").replaceChildren(...parts.map(part =>
+      equipmentCard(part.id, part.name, "Rank " + g.mods[part.id])));
+    $("pauseDetails").scrollTop = 0;
   }
   function sync() {
     const state = g.state,
@@ -469,6 +566,8 @@ const patrol = (() => {
     const key = phase + ":" + g.wave;
     if (lastPanel === key) return;
     lastPanel = key;
+    if (phase === "playing") captureFlightMouse();
+    else releaseFlightMouse();
     const modal = $("modal");
     modal.classList.toggle("upgrade-draft", phase === "draft");
     modal.classList.toggle("pause-menu", phase === "paused");
@@ -500,20 +599,7 @@ const patrol = (() => {
       kicker = "Wave " + g.wave + " · " + g.missionTitle;
       title = "Paused";
       detail = touchMode && innerWidth > innerHeight && innerHeight <= 470 && g.bonus ? "Bonus · " + g.bonus : "";
-      const equipment = g.loadout;
-      $("pilotLevel").textContent = "Pilot level " + pilotLevel();
-      const loadout = $("loadout");
-      loadout.replaceChildren();
-      if (!equipment.length) {
-        const empty = document.createElement("li");
-        empty.textContent = "Standard cannon and missiles";
-        loadout.append(empty);
-      }
-      for (const item of equipment) {
-        const row = document.createElement("li");
-        row.append(PatrolUpgrades.icon(item.id), item.name + " · Lv " + item.level);
-        loadout.append(row);
-      }
+      showEquipment();
       actions.append(
         button("Resume", pause, null, true),
         button("End", () => {
@@ -558,11 +644,19 @@ const patrol = (() => {
     actions.firstElementChild?.focus({ preventScroll: true });
   }
   function steer(e) {
-    if (!active() || e.pointerType === "touch") return;
-    input.x = clamp((2 * e.clientX) / innerWidth - 1, -1, 1);
-    input.y = clamp(1 - (2 * e.clientY) / innerHeight, -1, 1);
+    if (!active() || e.pointerType === "touch" || document.pointerLockElement === stage) return;
+    // A browser that denies capture can still reach full deflection before the window edge.
+    const gain = captureMouse.checked ? 1.5 : 1;
+    input.x = clamp((2 * e.clientX / innerWidth - 1) * gain, -1, 1);
+    input.y = clamp((1 - 2 * e.clientY / innerHeight) * gain, -1, 1);
     input.moved = true;
   }
+  window.addEventListener("mousemove", e => {
+    if (!active() || document.pointerLockElement !== stage || !(e.movementX || e.movementY)) return;
+    input.x = clamp(input.x + 2 * e.movementX / stage.clientWidth, -1, 1);
+    input.y = clamp(input.y - 2 * e.movementY / stage.clientHeight, -1, 1);
+    input.moved = true;
+  });
   // Real mouse pointer events precede compatibility mouse events on hybrid devices.
   window.addEventListener("pointerdown", e => {
     setTouchMode(e.pointerType === "touch");
@@ -577,6 +671,7 @@ const patrol = (() => {
     if (!active() || touchMode || e.target.closest("button,#touch") || e.sourceCapabilities?.firesTouchEvents) return;
     e.preventDefault();
     steer(e);
+    captureFlightMouse();
     if (e.button === 0) desktopHeld.fire = input.fire = true;
     if (e.button === 2) input.missile = true;
   });
@@ -589,7 +684,7 @@ const patrol = (() => {
   $("stage").addEventListener("contextmenu", (e) => e.preventDefault());
   window.addEventListener("keydown", (e) => {
     if (hangar.open) return;
-    if (e.code === "Escape" && !e.repeat) {
+    if ((e.code === "Escape" || e.code === "KeyP") && !e.repeat) {
       pause();
       return;
     }

@@ -51,10 +51,10 @@
       ],
     },
     cannon: {
-      name: "Pulse Cannon",
+      name: "Primary Tuning",
       levels: [
-        "Your cannon fires harder-hitting rounds.",
-        "Fire a faster stream of heavy rounds.",
+        "Your primary weapon deals more damage per round.",
+        "Increase the firing rate of your primary weapon.",
         "Twin barrels fire together down the nose.",
       ],
     },
@@ -183,6 +183,29 @@
     carrier: { hp: 1080, radius: 76, speed: 39, hull: [51, 9, 52] },
   };
 
+  const airframes = {
+    kestrel: {
+      name: "Kestrel", weapon: "Pulse cannon", trigger: "Cannon", description: "A steady stream of nose-fired rounds.",
+      cruise: 112, boost: 193, handling: 1, armor: 1, damage: 11, rate: 5.625, shotSpeed: 615,
+      nose: 11, tail: -9, tip: 8.5, tipZ: -4,
+    },
+    needle: {
+      name: "Needle", weapon: "Ion lance", trigger: "Lance", description: "Precision bolts pierce two targets in a line.",
+      cruise: 140, boost: 232, handling: 1.24, armor: 0.85, damage: 27, rate: 2.5, shotSpeed: 1020,
+      nose: 14, tail: -10, tip: 6.8, tipZ: -6.4,
+    },
+    manta: {
+      name: "Manta", weapon: "Scatter cannon", trigger: "Scatter", description: "Three rounds fan out on each trigger pull.",
+      cruise: 92, boost: 161, handling: 0.79, armor: 1.3, damage: 8, rate: 3.25, shotSpeed: 530,
+      nose: 8, tail: -9.5, tip: 13.5, tipZ: -4.8,
+    },
+  };
+  for (const [id, frame] of Object.entries(airframes)) {
+    frame.id = id;
+    frame.contactPoints = [[0, -1, 0], [0, 0, frame.nose], [0, 0, frame.tail],
+      [-frame.tip, 0, frame.tipZ], [frame.tip, 0, frame.tipZ]];
+  }
+
   function create(world, notify = () => {}) {
     let saved = [];
     try {
@@ -192,14 +215,15 @@
       /* Private sessions still keep discoveries for this visit. */
     }
 
-    const freshPlayer = () => ({
+    const freshPlayer = (frame = airframes.kestrel) => ({
+      frame,
       x: 0,
       y: Math.max(140, world.height(0, 0) + 80),
       z: 0,
       yaw: 0,
       pitch: 0,
       bank: 0,
-      speed: 112,
+      speed: frame.cruise,
       shield: 100,
       hull: 100,
       boost: false,
@@ -293,14 +317,14 @@
       g.lastReward = g.lastReward ? g.lastReward + "  /  " + line : line;
       notify("message", line);
     }
-    function start(minutes = 10, installed = {}) {
+    function start(minutes = 10, installed = {}, frameId = "kestrel") {
       const count = clamp(Math.round((Number(minutes) || 10) / 2), 5, 20);
       sequence = ["sweep", "beacons", "rush", "nest", "moons"];
       const extras = ["rush", "nest", "moons"];
       for (let i = 5; i < count; ++i) sequence.push(extras[(i - 5) % extras.length]);
       sequence.push("fleet");
       Object.assign(g, {
-        player: freshPlayer(),
+        player: freshPlayer(Object.hasOwn(airframes, frameId) ? airframes[frameId] : airframes.kestrel),
         time: 0,
         elapsed: 0,
         wave: 0,
@@ -627,8 +651,9 @@
         if (g.upgrades.comet) p.shield = Math.min(100, p.shield + 6 * g.upgrades.comet);
       }
       p.boost = boost;
-      const cruise = p.brake ? 60 : 112;
-      p.speed = ease(p.speed, boost ? 193 + (g.upgrades.comet || 0) * 14 : cruise, 1.4, dt);
+      const cruise = p.brake ? p.frame.cruise * (60 / 112) : p.frame.cruise;
+      p.speed = ease(p.speed, boost ? p.frame.boost + (g.upgrades.comet || 0) * 14 : cruise, 1.4, dt);
+      turn *= p.frame.handling;
       p.yaw = angle(p.yaw + turn * dt);
       const sy = Math.sin(p.yaw),
         cy = Math.cos(p.yaw);
@@ -663,7 +688,6 @@
     }
 
     // Probe the belly, nose, tail and wingtips so a low banking pass can clip the surface.
-    const contactPoints = [[0, -1, 0], [0, 0, 11], [0, 0, -9], [-8.5, 0, -4], [8.5, 0, -4]];
     function checkCrash() {
       const p = g.player, f = forward(p);
       const bank = p.bank + p.roll, sb = Math.sin(bank), cb = Math.cos(bank);
@@ -676,7 +700,7 @@
       }
       for (const e of g.enemies) if (e.hp > 0) checkNearby(e);
       for (const wingman of g.allies) checkNearby(wingman);
-      for (const [side, up, fore] of contactPoints) {
+      for (const [side, up, fore] of p.frame.contactPoints) {
         const lateral = side * cb + up * sb, vertical = up * cb - side * sb;
         const along = fore * cp - vertical * sp;
         const x = p.x + along * sy + lateral * cy, z = p.z + along * cy - lateral * sy;
@@ -794,7 +818,7 @@
       const leak = Math.max(0, amount - absorb / (g.upgrades.shield === 3 ? 0.72 : 1));
       p.shield = Math.max(0, p.shield - absorb);
       if (leak > 0.01) {
-        p.hull = Math.max(0, p.hull - leak);
+        p.hull = Math.max(0, p.hull - leak / p.frame.armor);
         bonusIntact = false;
       }
       p.hitFlash = 1;
@@ -875,15 +899,21 @@
         const sides = cannon === 3 ? [-4, 4] : [0];
         for (const offset of sides) {
           const nose = {
-            x: p.x + f[0] * 12 + Math.cos(p.yaw) * offset,
-            y: p.y + f[1] * 12 - 0.65,
-            z: p.z + f[2] * 12 - Math.sin(p.yaw) * offset,
+            x: p.x + f[0] * (p.frame.nose + 1) + Math.cos(p.yaw) * offset,
+            y: p.y + f[1] * (p.frame.nose + 1) - 0.65,
+            z: p.z + f[2] * (p.frame.nose + 1) - Math.sin(p.yaw) * offset,
           };
-          shot("cannon", nose, f, p.speed + 615, (cannon ? 16 : 11) + 2 * g.mods.cannon, 1.64);
+          const frame = p.frame;
+          const power = frame.damage + (cannon ? 5 : 0) + 2 * g.mods.cannon;
+          for (const spread of frame.id === "manta" ? [-0.085, 0, 0.085] : [0]) {
+            const direction = spread ? forward({ yaw: p.yaw + spread, pitch: p.pitch }) : f;
+            const round = shot("cannon", nose, direction, p.speed + frame.shotSpeed, power, 1.64);
+            round.style = frame.id;
+          }
         }
-        const volleysPerSecond = cannon >= 2 ? 7.5 : 5.625;
+        const volleysPerSecond = p.frame.rate * (cannon >= 2 ? 4 / 3 : 1);
         shotTimer += 1 / (volleysPerSecond * (g.rapidFireRemaining > 0 ? 2 : 1));
-        sound("cannon");
+        sound(p.frame.id === "kestrel" ? "cannon" : p.frame.id);
       }
       if (input.missile && p.missiles > 0) {
         const locked = g.lockProgress >= 1 && g.lockTarget && g.lockTarget.hp > 0 ? g.lockTarget : null;
@@ -1198,7 +1228,7 @@
         }
       } else {
         for (const e of g.enemies) {
-          if (e.hp <= 0) continue;
+          if (e.hp <= 0 || e === s.pierced) continue;
           const t = intersect(s, dx, dy, dz, e, e.radius);
           if (t < first) {
             hit = e;
@@ -1226,6 +1256,10 @@
             if (near) shot("wisp", s, aim(s, near), 560, 6 + level * 5, 1.3, near);
           }
         }
+      }
+      if (hit && s.style === "needle" && !s.pierced) {
+        s.pierced = hit;
+        return first < 1 ? impacts(s, dt * (1 - first)) : false;
       }
       if (s.kind === "missile") {
         impact(s.x, hit ? s.y : floor + 0.3, s.z, 15, !hit);
@@ -1370,5 +1404,5 @@
     return g;
   }
 
-  window.PatrolGame = { create };
+  window.PatrolGame = { create, airframes };
 })();

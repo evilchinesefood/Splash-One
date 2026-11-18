@@ -251,9 +251,9 @@ window.PatrolUpgrades = (() => {
     },
   };
 
-  function illustration(style) {
+  function illustration(style, width = 112) {
     const canvas = document.createElement("canvas");
-    canvas.width = 112;
+    canvas.width = width;
     canvas.height = 48;
     canvas.setAttribute("aria-hidden", "true");
     const c = canvas.getContext("2d");
@@ -261,14 +261,14 @@ window.PatrolUpgrades = (() => {
       b: "#241f30", s: "#4a465b", m: "#8a91a4", h: "#c8d3cd",
       w: "#fff6d9", c: style.color, x: style.shade,
     };
-    const width = Math.max(...style.sprite.map(row => row.trimEnd().length));
-    const x = Math.floor((canvas.width - width * 2) / 2);
+    const spriteWidth = Math.max(...style.sprite.map(row => row.trimEnd().length));
+    const x = Math.floor((canvas.width - spriteWidth * 2) / 2);
     const y = Math.floor((canvas.height - style.sprite.length * 2) / 2);
     // A sparse instrument grid leaves the equipment silhouette easy to read.
     c.fillStyle = style.color;
     c.globalAlpha = .22;
     for (let j = 4; j < 48; j += 8)
-      for (let i = 4; i < 112; i += 8) c.fillRect(i, j, 1, 1);
+      for (let i = 4; i < canvas.width; i += 8) c.fillRect(i, j, 1, 1);
     c.globalAlpha = 1;
     style.sprite.forEach((row, j) => {
       [...row].forEach((pixel, i) => {
@@ -348,8 +348,8 @@ window.PatrolUpgrades = (() => {
     celebrate(actions.parentElement);
   }
 
-  function icon(id) {
-    return illustration(gear[id] || gear.service);
+  function icon(id, width) {
+    return illustration(gear[id] || gear.service, width);
   }
 
   return { show, icon };

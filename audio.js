@@ -155,6 +155,14 @@ window.PatrolAudio = (() => {
       voice("triangle", 204 * pitch, 67, 0.105, 0.44);
       voice("noise", 1700, 560, 0.045, 0.22, 0.045);
     },
+    needle() {
+      voice("triangle", 1250, 180, 0.26, 0.48);
+      voice("sine", 1740, 620, 0.12, 0.19);
+    },
+    manta() {
+      voice("noise", 2900, 480, 0.19, 0.84);
+      voice("triangle", 140, 54, 0.21, 0.54);
+    },
     missile() {
       voice("triangle", 310, 89, 0.085, 0.42);
       voice("noise", 680, 3950, 0.23, 0.78, 0.025, channels.effects, 0.065);
