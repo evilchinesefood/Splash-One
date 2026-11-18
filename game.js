@@ -19,7 +19,14 @@
     return copy;
   };
 
-  const pickupKinds = ["squadron", "shield", "rapid"];
+  function rollPickup(shield) {
+    const missing = 1 - clamp(shield / 100, 0, 1);
+    const shieldChance = 0.1 + 0.6 * missing;
+    const roll = Math.random();
+    if (roll < shieldChance) return "shield";
+    return roll < shieldChance + (1 - shieldChance) / 2 ? "squadron" : "rapid";
+  }
+
   const pickupHints = {
     squadron: "Fly through the squadron beacon for an attack pass",
     shield: "Fly through the shield beacon for a full recharge",
@@ -247,7 +254,7 @@
       bonusIntact,
       gap,
       nextRaid;
-    let nextPickupAt = Infinity, pickupIndex = 0;
+    let nextPickupAt = Infinity;
     let shotTimer = 0,
       recharge = 0,
       rollClock = 0,
@@ -295,7 +302,6 @@
       });
       g.wisps.length = g.shots.length = g.particles.length = 0;
       nextPickupAt = 10;
-      pickupIndex = 0;
       g.rapidFireRemaining = 0;
       g.pickup = null;
       offered = {};
@@ -846,8 +852,7 @@
         const x = p.x + f[0] * 560 + Math.cos(p.yaw) * side;
         const z = p.z + f[2] * 560 - Math.sin(p.yaw) * side;
         const y = Math.max(world.height(x, z) + 45, clamp(p.y + f[1] * 360, 45, 2300));
-        const kind = pickupKinds[pickupIndex];
-        pickupIndex = (pickupIndex + 1) % pickupKinds.length;
+        const kind = rollPickup(p.shield);
         g.pickup = { kind, x, y, z, expires: g.elapsed + 52 };
         notify("message", pickupHints[kind]);
       }

@@ -28,7 +28,7 @@ Choose a region and sky on the flight deck. Autumn Lake District has wooded isla
 
 Destroy any three jets from the opening fighter formations to choose your first upgrade. The shortest route has five missions and a carrier finale. Patrol length is a pacing estimate. Longer routes add more missions before the carrier. The tracker leads you toward the current objective. Keep a contact near the nose to acquire a missile lock. The cannon and missile rails work independently.
 
-Fly through a beacon to collect it. The first appears about ten seconds into a patrol, and the three types take turns.
+Fly through a beacon to collect it. The first appears about ten seconds into a patrol. Each beacon is rolled independently when it spawns, so repeats are possible. The chance of a shield recharge rises smoothly from 10% at full shield to 40% at half shield and 70% at empty. Squadron and rapid fire split the remaining chance equally.
 
 | Beacon | Effect |
 | --- | --- |
