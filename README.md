@@ -28,7 +28,7 @@ Choose a region and sky on the flight deck. Autumn Lake District has wooded isla
 
 Destroy any three jets from the opening fighter formations to choose your first upgrade. The shortest route has five missions and a carrier finale. Patrol length is a pacing estimate. Longer routes add more missions before the carrier. The tracker leads you toward the current objective. Keep a contact near the nose to acquire a missile lock. The cannon and missile rails work independently.
 
-From wave two onward, two friendly jets occasionally radio in, fly off your wings, and fire at enemies ahead. They favor your locked target and peel away after a short visit. On the green cockpit radar, friendly and hostile contacts have distinct shapes.
+Fly through a cyan squadron beacon to call in three friendly jets. They make one attack pass on your locked target or the nearest enemy, then climb away. On the green cockpit radar, friendly and hostile contacts have distinct shapes.
 
 Shields recharge after a break from incoming hits. Each wave offers a bonus hull repair and a separate upgrade choice. Wing Wisps attack automatically. At level three, four wisps focus on a locked target if you also have Target Link. Tail Spark covers your rear, Orbit Guard intercepts incoming rounds, Kinetic Siphon restores shield on kills, and Split Salvo adds side bolts to a missile launch. Each has three ranks. Broadwing bombers fire slow amber spreads, Darts make quick attack passes, and Prism Towers signal their pulse volleys with a brightening diamond.
 

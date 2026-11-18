@@ -922,6 +922,54 @@
     }
     ctx.globalAlpha = 1;
   }
+  const beaconLight = "#97ffdf", beaconDark = "#254957";
+  function drawBeacon(ctx, p, time) {
+    const x = Math.round(p.x), y = Math.round(p.y);
+    // A hollow flight gate leaves the target point visible as the player closes in.
+    const radius = clamp(Math.round(p.k * 36), 8, 62);
+    const rim = clamp(Math.round(radius / 10), 1, 3);
+    for (let i = 0; i < 8; i++) {
+      const angle = (i + 0.5) * TAU / 8, next = angle + TAU / 8;
+      const x1 = x + Math.cos(angle) * radius, y1 = y + Math.sin(angle) * radius;
+      const x2 = x + Math.cos(next) * radius, y2 = y + Math.sin(next) * radius;
+      line(ctx, x1 - 1, y1, x2 - 1, y2, beaconDark, rim + 2);
+      line(ctx, x1, y1, x2, y2, i < 4 ? "#4fbab7" : beaconLight, rim);
+    }
+    // Two running lights trace the pickup volume. The three-ship glyph matches the radio call.
+    for (const phase of [0, Math.PI]) {
+      const a = time * 2.4 + phase;
+      disc(ctx, x + Math.cos(a) * radius, y + Math.sin(a) * radius, rim, "#fbffd3");
+    }
+    const gap = clamp(Math.round(radius * 0.25), 2, 5);
+    for (const wing of [-1, 0, 1]) {
+      const ax = x + wing * gap * 1.5, ay = y + (wing ? gap : 0) - gap;
+      line(ctx, ax - gap, ay + gap, ax, ay, beaconDark, 2);
+      line(ctx, ax, ay, ax + gap, ay + gap, beaconDark, 2);
+      line(ctx, ax - gap, ay + gap, ax, ay, "#e5ffef");
+      line(ctx, ax, ay, ax + gap, ay + gap, "#e5ffef");
+    }
+    const labelX = clamp(x, 20, ctx.canvas.width - 20), labelY = y - radius - 10;
+    ctx.fillStyle = beaconDark;
+    ctx.fillRect(labelX - 18, labelY - 1, 37, 7);
+    label(ctx, "SQUADRON", labelX, labelY, beaconLight, "center");
+  }
+
+  // Camera-space bearing also works for contacts behind the camera and in north-up view.
+  function edgeCue(cam, object, w, h, cockpit, inset = 0) {
+    const v = [object.x - cam.x, object.y - cam.y, object.z - cam.z];
+    const dot = axis => v[0] * axis[0] + v[1] * axis[1] + v[2] * axis[2];
+    let dx = dot(cam.right), dy = -dot(cam.up);
+    if (Math.abs(dx) + Math.abs(dy) < 0.01) dy = 1;
+    if (dot(cam.forward) < 0 && Math.abs(dy) < Math.abs(dx) * 0.18) dy = 0.2 * Math.abs(dx);
+    const n = Math.hypot(dx, dy);
+    dx /= n;
+    dy /= n;
+    const edgeY = dy > 0 ? (cockpit ? 0.18 : 0.35) * h : 0.34 * h;
+    const t = Math.min((w / 2 - 17 - inset) / (Math.abs(dx) || 0.0001),
+      (edgeY - inset) / (Math.abs(dy) || 0.0001));
+    return { x: w / 2 + dx * t, y: h / 2 + dy * t, dx, dy };
+  }
+
   function corners(ctx, x, y, r, color) {
     const arm = clamp(Math.round(r * 0.35), 2, 7);
     for (const i of [-1, 1])
@@ -955,6 +1003,23 @@
       ctx.fillRect(x, y, 1, 1);
       ctx.globalAlpha = 1;
     }
+    const pickup = g.supportPickup;
+    if (pickup) {
+      const p = project(pickup.x, pickup.y, pickup.z);
+      const cockpit = g.cockpitBlend > 0.5;
+      if (!p || p.x < 15 || p.x > w - 15 || p.y < 20 || p.y > h * (cockpit ? 0.65 : 0.91) ||
+          !visible(g, cam, pickup)) {
+        const { x, y, dx, dy } = edgeCue(cam, pickup, w, h, cockpit, 13);
+        line(ctx, x, y, x + dx * 7, y + dy * 7, beaconDark, 3);
+        line(ctx, x, y, x + dx * 7, y + dy * 7, beaconLight);
+        const bx = Math.round(x), by = Math.round(y);
+        polygon(ctx, [[bx-5,by],[bx,by-5],[bx+5,by],[bx,by+5]], beaconDark);
+        line(ctx, bx-3, by, bx, by-3, beaconLight);
+        line(ctx, bx, by-3, bx+3, by, beaconLight);
+        line(ctx, bx-2, by+2, bx, by, beaconLight);
+        line(ctx, bx, by, bx+2, by+2, beaconLight);
+      }
+    }
     const target = g.target || g.lockTarget;
     if (target) {
       const p = project(target.x, target.y, target.z);
@@ -973,21 +1038,8 @@
           ctx.fillRect(x, y, Math.ceil(36 * saturate(target.hp / target.maxHp)), 2);
         }
       } else {
-        const v = [target.x - cam.x, target.y - cam.y, target.z - cam.z];
-        const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-        let dx = dot(v, cam.right),
-          dy = -dot(v, cam.up);
-        if (Math.abs(dx) + Math.abs(dy) < 0.01) dy = 1;
-        if (dot(v, cam.forward) < 0 && Math.abs(dy) < Math.abs(dx) * 0.18) dy = 0.2 * Math.abs(dx);
-        const n = Math.hypot(dx, dy);
-        dx /= n;
-        dy /= n;
-        const edgeY = dy > 0 ? (g.cockpitBlend > 0.5 ? 0.18 : 0.35) * h : 0.34 * h;
-        const t = Math.min((w / 2 - 17) / (Math.abs(dx) || 0.0001), edgeY / (Math.abs(dy) || 0.0001));
-        const x = w / 2 + dx * t,
-          y = h / 2 + dy * t,
-          sx = -dy,
-          sy = dx;
+        const { x, y, dx, dy } = edgeCue(cam, target, w, h, g.cockpitBlend > 0.5);
+        const sx = -dy, sy = dx;
         polygon(
           ctx,
           [
@@ -1305,20 +1357,29 @@
       line(c, 211, 45, 211 + Math.sin(angle + offset) * rr, 45 - Math.cos(angle + offset) * rr, color);
     }
     const sy = Math.sin(e.yaw), cy = Math.cos(e.yaw);
-    function plotContact(t, friendly) {
+    function plotContact(t, kind) {
       const dx = t.x - e.x, dz = t.z - e.z;
       const rx = (dx * cy - dz * sy) / 59, ry = -(dx * sy + dz * cy) / 59;
       if (Math.hypot(rx, ry) >= rr - 1) return;
       const x = Math.round(211 + rx), y = Math.round(45 + ry);
-      c.fillStyle = friendly ? "#8ff6c6" : "#d0ff94";
-      if (friendly) {
+      if (kind === "pickup") {
+        c.fillStyle = beaconLight;
+        c.fillRect(x, y - 2, 1, 1);
+        c.fillRect(x - 2, y, 1, 1);
+        c.fillRect(x + 2, y, 1, 1);
+        c.fillRect(x, y + 2, 1, 1);
+        return;
+      }
+      c.fillStyle = kind === "ally" ? "#8ff6c6" : "#d0ff94";
+      if (kind === "ally") {
         c.fillRect(x - 1, y, 1, 1);
         c.fillRect(x + 1, y, 1, 1);
         c.fillRect(x, y - 1, 1, 1);
       } else c.fillRect(x, y, 2, 2);
     }
-    for (const t of g.enemies) plotContact(t, false);
-    for (const t of g.allies || []) plotContact(t, true);
+    for (const t of g.enemies) plotContact(t, "enemy");
+    for (const t of g.allies || []) plotContact(t, "ally");
+    if (g.supportPickup) plotContact(g.supportPickup, "pickup");
     c.fillStyle = "#e5ffda";
     c.fillRect(210, 45, 3, 1);
     c.fillRect(211, 44, 1, 3);
@@ -1429,6 +1490,15 @@
           ctx.translate(w, 0);
           ctx.scale(-1, 1);
         }
+        // Edge gasket and fasteners follow the existing brace, outside the sight and heading tape.
+        line(ctx, 0, h * 0.32, w * 0.086, h * 0.74, "#313b49", 2);
+        for (const t of [0.24, 0.66]) {
+          const fastenerX = Math.round(w * 0.086 * t), fastenerY = Math.round(h * (0.32 + 0.42 * t));
+          ctx.fillStyle = "#242e3c";
+          ctx.fillRect(fastenerX, fastenerY, 3, 3);
+          ctx.fillStyle = "#a0aaa1";
+          ctx.fillRect(fastenerX, fastenerY, 2, 1);
+        }
         const lip = y + 31 * scale;
         const outer = lip - Math.min(14 * scale, x * 0.16);
         polygon(ctx, [[0, outer], [x, lip], [x + 1, h], [0, h]], "#414b59");
@@ -1516,10 +1586,18 @@
       const a = project(e.x, e.y, e.z);
       if (inScreen(a, 14)) objects.push({ type: "wisp", e, a, d: a.d });
     }
+    if (g.supportPickup) {
+      const e = g.supportPickup, a = project(e.x, e.y, e.z);
+      if (inScreen(a, 65) && visible(g, cam, e)) objects.push({ type: "pickup", a, d: a.d });
+    }
     const pp = project(p.x, p.y, p.z);
     if (pp && blend < 0.52) objects.push({ type: "player", e: p, a: pp, d: pp.d });
     objects.sort((a, b) => b.d - a.d);
     for (const { type, e, a } of objects) {
+      if (type === "pickup") {
+        drawBeacon(ctx, a, g.time);
+        continue;
+      }
       if (type === "fx") {
         paintFx(ctx, a, e, project);
         continue;

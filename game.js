@@ -197,6 +197,7 @@
       player: freshPlayer(),
       enemies: [],
       allies: [],
+      supportPickup: null,
       shots: [],
       particles: [],
       wisps: [],
@@ -284,7 +285,8 @@
         upgrades: Object.fromEntries(Object.keys(gear).map((id) => [id, 0])),
       });
       g.wisps.length = g.shots.length = g.particles.length = 0;
-      nextSupport = Infinity;
+      nextSupport = 10;
+      g.supportPickup = null;
       offered = {};
       tailReady = guardReady = 0;
       shotTimer = recharge = rollClock = 0;
@@ -294,7 +296,6 @@
     }
     function nextWave() {
       g.wave++;
-      if (g.wave === 2) nextSupport = g.elapsed + 8 + Math.random() * 12;
       const key = sequence[g.wave - 1] || ["rush", "nest", "moons", "fleet"][(g.wave - g.waveCount - 1) % 4];
       mission = encounters[key];
       missionTime = group = gap = 0;
@@ -472,6 +473,8 @@
       if (mission === encounters.fleet) unlock("arc");
       g.state = g.wave === g.waveCount ? "won" : "draft";
       g.choices = g.state === "draft" ? draftChoices() : [];
+      if (g.supportPickup) nextSupport = g.elapsed + 10;
+      g.supportPickup = null;
       g.allies.length = g.enemies.length = g.shots.length = 0;
       g.lockTarget = g.target = null;
       g.lockProgress = 0;
@@ -802,63 +805,82 @@
       guardReady = g.time + [0, 3, 2, 1.5][level];
       sound("wisp");
     }
-    function updateAllies(dt) {
-      const p = g.player, sinYaw = Math.sin(p.yaw), cosYaw = Math.cos(p.yaw);
-      if (!g.allies.length && g.elapsed >= nextSupport && g.enemies.some(e => e.hp > 0)) {
-        for (const side of [-1, 1]) {
-          g.allies.push({
-            side, age: 0, cooldown: 1.6 + side * 0.25, yaw: p.yaw, pitch: 0, bank: 0,
-            x: p.x + side * 135 * cosYaw - 80 * sinYaw, y: p.y + 38,
-            z: p.z - side * 135 * sinYaw - 80 * cosYaw,
-          });
-        }
-        nextSupport = g.elapsed + 75 + Math.random() * 35;
-        notify("message", "Friendly flight inbound · covering your wings");
-        sound("radio");
+    function launchSupport(target) {
+      const p = g.player;
+      // Set one crossing course for the whole squadron at collection time.
+      const yaw = Math.atan2(target.x - p.x, target.z - p.z) + 0.42;
+      const dx = Math.sin(yaw), dz = Math.cos(yaw);
+      const runIn = 710, speed = 236;
+      const lead = target.speed * runIn / speed;
+      const passX = target.x + Math.sin(target.yaw) * lead;
+      const passZ = target.z + Math.cos(target.yaw) * lead;
+      for (const slot of [-1, 0, 1]) {
+        const back = runIn + Math.abs(slot) * 42;
+        const x = passX - dx * back + dz * slot * 34;
+        const z = passZ - dz * back - dx * slot * 34;
+        g.allies.push({
+          x, z, y: Math.max(target.y + 65, world.height(x, z) + 55),
+          yaw, pitch: 0, bank: 0, slot, speed, age: 0,
+          fireAt: 0.3 + Math.abs(slot) * 0.16, passTime: back / speed,
+          target,
+        });
       }
+      notify("message", "Squadron inbound · attack run");
+      sound("radio");
+    }
+    function updateSupportPickup() {
+      const p = g.player;
+      if (!g.supportPickup && g.elapsed >= nextSupport && g.enemies.some(e => e.hp > 0)) {
+        const f = forward(p), side = Math.random() < 0.5 ? -64 : 64;
+        const x = p.x + f[0] * 560 + Math.cos(p.yaw) * side;
+        const z = p.z + f[2] * 560 - Math.sin(p.yaw) * side;
+        const y = Math.max(world.height(x, z) + 45, clamp(p.y + f[1] * 360, 45, 2300));
+        g.supportPickup = { x, y, z, expires: g.elapsed + 52 };
+        notify("message", "Fly through the squadron beacon for an attack pass");
+      }
+      const beacon = g.supportPickup;
+      if (!beacon) return;
+      if (g.elapsed >= beacon.expires) {
+        g.supportPickup = null;
+        nextSupport = g.elapsed + 16;
+        return;
+      }
+      // The north-up camera steers in the horizontal plane and manages altitude for the pilot.
+      const range = g.view === 2 ? Math.hypot(p.x - beacon.x, p.z - beacon.z) : distance(p, beacon);
+      if (range > 36) return;
+      const locked = g.lockProgress >= 1 && g.lockTarget?.hp > 0;
+      const target = locked ? g.lockTarget : g.enemies.reduce((near, e) =>
+        e.hp > 0 && (!near || distance(p, e) < distance(p, near)) ? e : near, null);
+      if (!target) return;
+      g.supportPickup = null;
+      nextSupport = g.elapsed + 65 + Math.random() * 25;
+      launchSupport(target);
+    }
+    function updateAllies(dt) {
+      updateSupportPickup();
       for (const a of g.allies) {
         a.age += dt;
-        const leaving = a.age > 22;
-        if (leaving) {
-          a.yaw += a.side * 0.15 * dt;
-          a.bank = ease(a.bank, a.side * 0.46, 2, dt);
-          a.pitch = ease(a.pitch, 0.2, 2, dt);
-          a.x += Math.sin(a.yaw) * 240 * dt;
-          a.z += Math.cos(a.yaw) * 240 * dt;
-          a.y += 45 * dt;
-        } else {
-          const ahead = 52 + 6 * Math.sin(a.age * 0.6);
-          const side = a.side * 32;
-          a.x = ease(a.x, p.x + ahead * sinYaw + side * cosYaw, 2.8, dt) + p.speed * sinYaw * dt;
-          a.z = ease(a.z, p.z + ahead * cosYaw - side * sinYaw, 2.8, dt) + p.speed * cosYaw * dt;
-          a.y = ease(a.y, p.y + 8 + a.side * 2 + Math.sin(a.age), 3, dt);
-          a.yaw += angle(p.yaw - a.yaw) * (1 - Math.exp(-3 * dt));
-          a.bank = ease(a.bank, p.bank, 3, dt);
-          a.pitch = ease(a.pitch, p.pitch, 3, dt);
-        }
-        a.y = Math.max(a.y, world.height(a.x, a.z) + 9);
-        a.cooldown -= dt;
-        if (leaving || a.cooldown > 0) continue;
-        const forwardX = Math.sin(a.yaw), forwardZ = Math.cos(a.yaw);
-        const lock = g.lockProgress >= 1 && g.lockTarget?.hp > 0 ? g.lockTarget : null;
-        let target = null, reach = 720;
-        for (const enemy of g.enemies) {
-          if (enemy.hp <= 0) continue;
-          const d = distance(a, enemy);
-          const ahead = (enemy.x - a.x) * forwardX + (enemy.z - a.z) * forwardZ;
-          if (d > 720 || ahead < d * 0.45) continue;
-          if (enemy === lock) { target = enemy; break; }
-          if (d < reach) { target = enemy; reach = d; }
-        }
-        if (target) {
-          const lead = distance(a, target) / 590;
-          const intercept = { x: target.x + Math.sin(target.yaw) * target.speed * lead,
-            y: target.y, z: target.z + Math.cos(target.yaw) * target.speed * lead };
-          shot("ally", a, aim(a, intercept), 590, 8, 1.6);
-        }
-        a.cooldown = target ? 1.3 : 0.25;
+        const dx = Math.sin(a.yaw), dz = Math.cos(a.yaw);
+        const leaving = a.age >= a.passTime;
+        a.x += dx * a.speed * dt;
+        a.z += dz * a.speed * dt;
+        const oldY = a.y;
+        a.y = Math.max(world.height(a.x, a.z) + 36,
+          a.y + (leaving ? 38 : -9) * dt);
+        a.pitch = ease(a.pitch, Math.atan2((a.y - oldY) / dt, a.speed), 4, dt);
+        a.bank = ease(a.bank, leaving ? 0.22 + a.slot * 0.12 : 0, 2, dt);
+        if (leaving || a.age < a.fireAt) continue;
+        a.fireAt += 0.38;
+        const target = a.target;
+        if (target.hp <= 0 || !g.enemies.includes(target)) continue;
+        const range = distance(a, target);
+        if (range > 1050 || (target.x - a.x) * dx + (target.z - a.z) * dz < 0) continue;
+        const lead = target.speed * range / 650;
+        const intercept = { x: target.x + Math.sin(target.yaw) * lead, y: target.y,
+          z: target.z + Math.cos(target.yaw) * lead };
+        shot("ally", a, aim(a, intercept), 650, 10, 1.8);
       }
-      if (g.allies.length && g.allies[0].age >= 28) g.allies.length = 0;
+      if (g.allies.length && g.allies[0].age > 8) g.allies.length = 0;
     }
     function updateWisps(dt) {
       const p = g.player,
