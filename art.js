@@ -195,10 +195,9 @@
   }
   const jetNozzle = { x: 1.48, y: -0.13, z: -9.5, width: 0.74, height: 0.66 };
   const carrierNozzle = { x: 21, y: -0.8, z: -45, width: 5, height: 4 };
-  function buildJet(hostile = false) {
-    const mesh = [],
-      body = hostile ? enemyMetal : steel,
-      trim = hostile ? red : slate;
+  const azure = ["#294465", "#35698b", "#62b2cd", "#c3f5ef"];
+  function buildJet(body = steel, trim = slate, tip = red[2]) {
+    const mesh = [];
     loft(
       mesh,
       [
@@ -250,7 +249,7 @@
       surface(
         mesh,
         [at(8.0, -0.2, -2.48), at(8.94, -0.27, -3.53), at(8.49, -0.34, -5.03), at(7.76, -0.23, -5.07)],
-        red[2],
+        tip,
       );
       surface(
         mesh,
@@ -296,7 +295,7 @@
       surface(
         mesh,
         [at(2.6, 3.4, -6.26), at(2.76, 3.98, -6.85), at(2.98, 4.02, -8.54), at(2.84, 3.39, -8.48)],
-        red[2],
+        tip,
       );
       surface(
         mesh,
@@ -333,7 +332,8 @@
     return mesh;
   }
   const jetMesh = buildJet(),
-    rivalMesh = buildJet(true);
+    rivalMesh = buildJet(enemyMetal, red),
+    friendlyMesh = buildJet(steel, azure, azure[3]);
   function buildCrescent() {
     const mesh = [];
     for (const s of [-1, 1]) {
@@ -767,7 +767,7 @@
     line(ctx,x+r,y,x,y+r,tone);line(ctx,x,y+r,x-r,y,tone);
     disc(ctx,x,y,1+e.charge*2,tone);
   }
-  function compactEnemy(ctx, p, e, atNight) {
+  function compactAircraft(ctx, p, e, atNight, friendly) {
     const x = Math.round(p.x),
       y = Math.round(p.y),
       ground = e.ground;
@@ -785,7 +785,7 @@
       const size = clamp(Math.round(p.k * (e.kind === "carrier" ? 46 : 8)), 2, 8);
       line(ctx, x - size, y + 1, x, y - 1, "#514458");
       line(ctx, x, y - 1, x + size, y + 1, "#514458");
-      ctx.fillStyle = e.kind === "crescent" ? "#f5b2ab" : "#e5c6aa";
+      ctx.fillStyle = friendly ? azure[3] : e.kind === "crescent" ? "#f5b2ab" : "#e5c6aa";
       ctx.fillRect(x, y - 1, 2, 1);
     }
   }
@@ -795,7 +795,8 @@
     const kind = s.kind,
       missile = kind === "missile",
       enemy = kind === "enemy",
-      wisp = kind === "wisp";
+      wisp = kind === "wisp",
+      friendly = kind === "ally";
     const v = Math.hypot(s.vx, s.vy, s.vz) || 1;
     const len = clamp(v * 0.032, 3, 26),
       end = project(s.x - (s.vx / v) * len, s.y - (s.vy / v) * len, s.z - (s.vz / v) * len);
@@ -816,7 +817,7 @@
         line(ctx, p.x, p.y, tail.x, tail.y, "#dae4dc", Math.max(1, Math.round(p.k * 0.5)));
       }
     } else {
-      const col = enemy ? "#ff665b" : wisp ? "#72e6d6" : "#ffd26f";
+      const col = enemy ? "#ff665b" : wisp ? "#72e6d6" : friendly ? "#74c4ff" : "#ffd26f";
       const width = clamp(Math.round(p.k * 0.4), 1, 3);
       line(ctx, end.x, end.y, p.x, p.y, col, width);
       line(
@@ -825,7 +826,7 @@
         end.y * 0.38 + p.y * 0.62,
         p.x,
         p.y,
-        enemy ? "#ffd1a2" : wisp ? "#d5fff0" : "#fff7c9",
+        enemy ? "#ffd1a2" : wisp || friendly ? "#d5fff0" : "#fff7c9",
         width,
       );
     }
@@ -1286,28 +1287,41 @@
             ez = e.z + (-px * sy - py * cy) * 59;
           const terrain = g.world.height(ex, ez);
           rc.fillStyle =
-            terrain <= 0 ? "#312e32" : terrain < 25 ? "#5c4636" : terrain < 75 ? "#82613d" : "#a47c47";
+            terrain <= 0 ? "#0a241d" : terrain < 25 ? "#153d28" : terrain < 75 ? "#235332" : "#38683c";
           rc.fillRect(px + rr, py + rr, 2, 2);
         }
+      // A dotted half-range ring remains visible over the moving terrain.
+      rc.fillStyle = "#558761";
+      for (let i = 0; i < 24; i++) {
+        const a = (i * TAU) / 24;
+        rc.fillRect(rr + Math.round(Math.sin(a) * rr / 2), rr + Math.round(Math.cos(a) * rr / 2), 1, 1);
+      }
       radarOwner = g;
       radarStamp = g.time;
     }
     c.drawImage(radarCanvas, 211 - rr, 45 - rr);
     const angle = g.time * 1.85;
-    line(c, 211, 45, 211 + Math.sin(angle) * rr, 45 - Math.cos(angle) * rr, "#f9bb6e");
-    for (const t of g.enemies) {
-      const dx = t.x - e.x,
-        dz = t.z - e.z,
-        rx = (dx * Math.cos(e.yaw) - dz * Math.sin(e.yaw)) / 59,
-        ry = -(dx * Math.sin(e.yaw) + dz * Math.cos(e.yaw)) / 59;
-      if (Math.hypot(rx, ry) < rr) {
-        c.fillStyle = "#ffdc8b";
-        c.fillRect(Math.round(211 + rx), Math.round(45 + ry), 2, 2);
-      }
+    for (const [offset, color] of [[-0.15, "#40824a"], [0, "#83ea80"]]) {
+      line(c, 211, 45, 211 + Math.sin(angle + offset) * rr, 45 - Math.cos(angle + offset) * rr, color);
     }
-    c.fillStyle = "#faf2b0";
+    const sy = Math.sin(e.yaw), cy = Math.cos(e.yaw);
+    function plotContact(t, friendly) {
+      const dx = t.x - e.x, dz = t.z - e.z;
+      const rx = (dx * cy - dz * sy) / 59, ry = -(dx * sy + dz * cy) / 59;
+      if (Math.hypot(rx, ry) >= rr - 1) return;
+      const x = Math.round(211 + rx), y = Math.round(45 + ry);
+      c.fillStyle = friendly ? "#8ff6c6" : "#d0ff94";
+      if (friendly) {
+        c.fillRect(x - 1, y, 1, 1);
+        c.fillRect(x + 1, y, 1, 1);
+        c.fillRect(x, y - 1, 1, 1);
+      } else c.fillRect(x, y, 2, 2);
+    }
+    for (const t of g.enemies) plotContact(t, false);
+    for (const t of g.allies || []) plotContact(t, true);
+    c.fillStyle = "#e5ffda";
     c.fillRect(210, 45, 3, 1);
-    c.fillRect(211, 44, 1, 2);
+    c.fillRect(211, 44, 1, 3);
     gauge(257, 46, 17, "VSI");
     ticks(257, 46, 14);
     needle(257, 46, 11, 0.5 + (e.vy || 0) / 125);
@@ -1407,6 +1421,32 @@
       ],
       "#353a49",
     );
+    // Fill the extra span on wide windscreens with joined side consoles at the same pixel scale as the dials.
+    if (!thumbSpace && x >= 18) {
+      for (const right of [false, true]) {
+        ctx.save();
+        if (right) {
+          ctx.translate(w, 0);
+          ctx.scale(-1, 1);
+        }
+        const lip = y + 31 * scale;
+        const outer = lip - Math.min(14 * scale, x * 0.16);
+        polygon(ctx, [[0, outer], [x, lip], [x + 1, h], [0, h]], "#414b59");
+        polygon(ctx, [[0, outer + 8 * scale], [x, lip + 8 * scale], [x, h], [0, h]], "#2b3443");
+        line(ctx, 0, outer, x, lip, "#202634", Math.max(1, Math.round(3 * scale)));
+        line(ctx, 0, outer + 3 * scale, x, lip + 3 * scale, "#98a39b");
+        const seam = Math.round(x - 10 * scale);
+        line(ctx, seam, lip + 7 * scale, seam - 7 * scale, h, "#171f2e", 2);
+        line(ctx, seam + 2, lip + 8 * scale, seam - 5 * scale, h, "#65717b");
+        // The vent is recessed below the lip, away from the sightline.
+        const ventY = Math.round(lip + 17 * scale);
+        for (let vx = 6 * scale; vx < seam - 8 * scale; vx += 6 * scale) {
+          line(ctx, vx, ventY + 6 * scale, vx + 3 * scale, ventY, "#17232d", 2);
+          line(ctx, vx + 2, ventY + 6 * scale, vx + 4 * scale, ventY + 2, "#56636b");
+        }
+        ctx.restore();
+      }
+    }
     ctx.fillStyle = "#353a49";
     ctx.fillRect(Math.floor(x), Math.floor(y + ph - 1), Math.ceil(pw), Math.max(0, Math.ceil(h - y - ph + 1)));
     ctx.imageSmoothingEnabled = false;
@@ -1460,6 +1500,10 @@
       const a = project(e.x, e.y, e.z);
       if (inScreen(a, 80) && visible(g, cam, e)) objects.push({ type: "enemy", e, a, d: a.d });
     }
+    for (const e of g.allies || []) {
+      const a = project(e.x, e.y, e.z);
+      if (inScreen(a, 60) && visible(g, cam, e)) objects.push({ type: "ally", e, a, d: a.d });
+    }
     for (const s of g.shots) {
       const a = project(s.x, s.y, s.z);
       if (inScreen(a, 36)) objects.push({ type: "shot", e: s, a, d: a.d });
@@ -1510,20 +1554,28 @@
         ctx.restore();
         continue;
       }
-      const carrier = e.kind === "carrier";
-      if (e.kind === "jet" || e.kind === "interceptor") {
+      const carrier = e.kind === "carrier", friendly = type === "ally";
+      const fighter = friendly || e.kind === "jet" || e.kind === "interceptor";
+      if (friendly) {
+        const y = a.y - Math.max(5, Math.round(a.k * 5));
+        line(ctx, a.x - 3, y, a.x, y - 2, "#26455f", 2);
+        line(ctx, a.x, y - 2, a.x + 3, y, "#26455f", 2);
+        line(ctx, a.x - 3, y, a.x, y - 2, azure[3]);
+        line(ctx, a.x, y - 2, a.x + 3, y, azure[3]);
+      }
+      if (fighter) {
         drawTrails(ctx, g, trailState(g, basis(e), e), project, e);
       }
       if (a.k * (carrier ? 50 : e.kind === "bomber" ? 23 : 8) < 4) {
-        compactEnemy(ctx, a, e, g.world.night);
+        compactAircraft(ctx, a, e, g.world.night, friendly);
         if (e.kind === "prism") prismCharge(ctx,e,project);
         continue;
       }
       const ground = e.ground,
         base = ground ? { ...e, y: Math.max(0, g.world.height(e.x, e.z)) } : e;
       const eb = basis(e);
-      let mesh = meshes[e.kind] || rivalMesh;
-      if (carrier || e.kind === "jet" || e.kind === "interceptor")
+      let mesh = friendly ? friendlyMesh : meshes[e.kind] || rivalMesh;
+      if (carrier || fighter)
         mesh = mesh.concat(exhaustMesh(carrier ? carrierNozzle : jetNozzle, g.time, false));
       drawMesh(ctx, base, mesh, eb, project, 0, g.world.night);
       if (e.kind === "prism") prismCharge(ctx,e,project);

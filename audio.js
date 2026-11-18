@@ -2,10 +2,18 @@
 window.PatrolAudio = (() => {
   const muteKey = "patrol.audio.muted";
   const musicKey = "patrol.music.muted";
+  const levels = { music: 100, effects: 100 };
+  const channels = {};
   let enabled = true, musicEnabled = true;
   try {
     enabled = localStorage.getItem(muteKey) !== "1";
     musicEnabled = localStorage.getItem(musicKey) !== "1";
+    for (const name of Object.keys(levels)) {
+      const value = localStorage.getItem("patrol.volume." + name);
+      if (value !== null && value.trim() && Number.isFinite(Number(value))) {
+        levels[name] = Math.max(0, Math.min(100, Math.round(Number(value))));
+      }
+    }
   } catch { /* Private windows still support sound for the current visit. */ }
 
   let ctx, master, noise, engineGain, intake, turbine, rumble;
@@ -21,6 +29,11 @@ window.PatrolAudio = (() => {
     limiter.ratio.value = 5;
     master.connect(limiter).connect(ctx.destination);
     master.gain.value = 0.8;
+    for (const name of Object.keys(levels)) {
+      channels[name] = ctx.createGain();
+      channels[name].gain.value = levels[name] / 100;
+      channels[name].connect(master);
+    }
 
     noise = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
     const samples = noise.getChannelData(0);
@@ -28,7 +41,7 @@ window.PatrolAudio = (() => {
 
     engineGain = ctx.createGain();
     engineGain.gain.value = 0;
-    engineGain.connect(master);
+    engineGain.connect(channels.effects);
     const rush = ctx.createBufferSource();
     rush.buffer = noise;
     rush.loop = true;
@@ -63,7 +76,7 @@ window.PatrolAudio = (() => {
     rumble.frequency.setTargetAtTime(boost ? 98 : braking ? 52 : 72, now, 0.24);
     intake.frequency.setTargetAtTime(boost ? 2600 : braking ? 620 : 1100, now, 0.16);
     turbine.frequency.setTargetAtTime(boost ? 320 : braking ? 126 : 194, now, 0.18);
-    if (ignition) voice("noise", 460, 2300, 0.36, 0.45, 0, master, 0.055);
+    if (ignition) voice("noise", 460, 2300, 0.36, 0.45, 0, channels.effects, 0.055);
   }
 
   async function start() {
@@ -100,7 +113,7 @@ window.PatrolAudio = (() => {
   }
 
   // Short noise bursts provide the attack; pitched sweeps carry through small speakers.
-  function voice(type, from, to, length, level, delay = 0, output = master, attack = 0.005) {
+  function voice(type, from, to, length, level, delay = 0, output = channels.effects, attack = 0.005) {
     const t = ctx.currentTime + delay;
     const envelope = ctx.createGain();
     let source, filter, pitch;
@@ -144,22 +157,28 @@ window.PatrolAudio = (() => {
     },
     missile() {
       voice("triangle", 310, 89, 0.085, 0.42);
-      voice("noise", 680, 3950, 0.23, 0.78, 0.025, master, 0.065);
+      voice("noise", 680, 3950, 0.23, 0.78, 0.025, channels.effects, 0.065);
       voice("noise", 2850, 360, 0.56, 0.65, 0.18);
     },
     boom() {
       voice("noise", 4100, 380, 0.28, 0.96);
       voice("sine", 158, 43, 0.69, 0.75);
-      voice("noise", 950, 165, 0.83, 0.65, 0.075, master, 0.065);
+      voice("noise", 950, 165, 0.83, 0.65, 0.075, channels.effects, 0.065);
     },
     splash() {
       voice("sine", 195, 64, 0.23, 0.57);
-      voice("noise", 1150, 3900, 0.22, 0.68, 0, master, 0.035);
-      voice("noise", 3200, 540, 0.54, 0.52, 0.13, master, 0.065);
+      voice("noise", 1150, 3900, 0.22, 0.68, 0, channels.effects, 0.035);
+      voice("noise", 3200, 540, 0.54, 0.52, 0.13, channels.effects, 0.065);
     },
     hit() { voice("triangle", 1210, 455, 0.077, 0.24); },
     deflect() { voice("sine", 730, 325, 0.19, 0.35); voice("triangle", 1050, 470, 0.12, 0.15); },
     hurt() { voice("sawtooth", 205, 75, 0.23, 0.23); voice("noise", 2100, 390, 0.22, 0.65); },
+    radio() {
+      voice("noise", 1950, 820, 0.065, 0.24);
+      voice("triangle", 880, 880, 0.095, 0.25, 0.035);
+      voice("triangle", 659, 659, 0.14, 0.23, 0.145);
+      voice("noise", 1400, 610, 0.055, 0.17, 0.26);
+    },
     lock() { voice("sine", 820, 820, 0.11, 0.35); voice("sine", 1120, 1120, 0.15, 0.34, 0.095); },
     shield() { voice("sine", 360, 980, 0.41, 0.39); },
     wisp() { voice("triangle", 800, 345, 0.16, 0.37); },
@@ -241,7 +260,7 @@ window.PatrolAudio = (() => {
     if (!musicBus) {
       musicBus = ctx.createGain();
       musicBus.gain.value = 0.54;
-      musicBus.connect(master);
+      musicBus.connect(channels.music);
       nextBeat = now + 0.025;
     }
     // Schedule against the audio clock. A slow frame must never replay a backlog of notes.
@@ -253,11 +272,27 @@ window.PatrolAudio = (() => {
     }
   }
 
+  function setVolume(name, value) {
+    if (!Object.hasOwn(levels, name) || !Number.isFinite(value)) return;
+    levels[name] = Math.max(0, Math.min(100, Math.round(value)));
+    if (ctx) channels[name].gain.setTargetAtTime(levels[name] / 100, ctx.currentTime, 0.012);
+    try { localStorage.setItem("patrol.volume." + name, String(levels[name])); } catch { /* Session only. */ }
+  }
+
+  function previewVolume(name) {
+    if (!enabled || !levels[name] || ctx?.state !== "running") return;
+    if (name === "effects") play("equip");
+    if (name === "music" && musicEnabled) {
+      voice("triangle", 440, 440, 0.22, 0.084, 0, channels.music);
+      voice("sine", 554, 554, 0.3, 0.075, 0.11, channels.music);
+    }
+  }
+
   function toggleMusic() {
     musicEnabled = !musicEnabled;
     try { localStorage.setItem(musicKey, musicEnabled ? "0" : "1"); } catch { /* Session only. */ }
     if (!musicEnabled) stopMusic();
   }
   return { get enabled() { return enabled; }, get musicEnabled() { return musicEnabled; },
-    start, toggle, toggleMusic, play, flight };
+    volume: name => levels[name], setVolume, previewVolume, start, toggle, toggleMusic, play, flight };
 })();

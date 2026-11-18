@@ -84,50 +84,71 @@
           <h2 id="modalTitle"></h2>
           <p id="modalText"></p>
           <div id="pauseDetails" hidden>
-            <div class="pause-heading">
-              <h3>Equipped upgrades</h3>
-              <span id="pilotLevel"></span>
-            </div>
-            <ul id="loadout"></ul>
-            <h3>Flight controls</h3>
-            <dl class="bindings">
-              <div>
-                <dt>Steer</dt>
-                <dd>Mouse</dd>
+            <section class="pause-card equipment">
+              <div class="pause-heading">
+                <h3>Equipment</h3>
+                <span id="pilotLevel"></span>
               </div>
-              <div>
-                <dt>Fire cannon</dt>
-                <dd>Left click</dd>
+              <ul id="loadout"></ul>
+            </section>
+            <section class="pause-card mix">
+              <h3>Audio</h3>
+              <div class="volume-row">
+                <label for="musicVolume">Music</label><output id="musicPercent" for="musicVolume">100%</output>
+                <input id="musicVolume" type="range" min="0" max="100" value="100" />
               </div>
-              <div>
-                <dt>Launch missile</dt>
-                <dd>Right click / F</dd>
+              <div class="volume-row">
+                <label for="effectsVolume">Sound effects</label><output id="effectsPercent" for="effectsVolume">100%</output>
+                <input id="effectsVolume" type="range" min="0" max="100" value="100" />
               </div>
-              <div>
-                <dt>Afterburner</dt>
-                <dd>Hold Shift</dd>
+              <div class="pause-tools">
+                <button id="audio" title="Toggle all game audio" aria-pressed="true"><span id="audioIcon">♪</span> Sound on</button>
+                <button id="music" title="Toggle the flight soundtrack" aria-pressed="true">Music on</button>
               </div>
-              <div>
-                <dt>Airbrake</dt>
-                <dd>Hold S</dd>
-              </div>
-              <div>
-                <dt>Barrel roll</dt>
-                <dd>Q / E</dd>
-              </div>
-              <div>
-                <dt>Change view</dt>
-                <dd>Space</dd>
-              </div>
-              <div>
-                <dt>Pause / resume</dt>
-                <dd>Esc</dd>
-              </div>
-            </dl>
-            <p class="touch-guide">
-              Rest your left thumb on the stick and drag gently to aim. Hold Cannon with your right thumb, then slide onto Missile to launch while firing. You can also tap Missile or Roll, hold Boost or Brake, and tap the camera name beside the missile count to change views.
-            </p>
-            <div class="pause-tools">
+            </section>
+            <section class="pause-card controls">
+              <h3>Flight controls</h3>
+              <dl class="bindings">
+                <div>
+                  <dt>Steer</dt>
+                  <dd>Mouse</dd>
+                </div>
+                <div>
+                  <dt>Fire cannon</dt>
+                  <dd>Left click</dd>
+                </div>
+                <div>
+                  <dt>Launch missile</dt>
+                  <dd>Right click / F</dd>
+                </div>
+                <div>
+                  <dt>Afterburner</dt>
+                  <dd>Hold Shift</dd>
+                </div>
+                <div>
+                  <dt>Airbrake</dt>
+                  <dd>Hold S</dd>
+                </div>
+                <div>
+                  <dt>Barrel roll</dt>
+                  <dd>Q / E</dd>
+                </div>
+                <div>
+                  <dt>Change view</dt>
+                  <dd>Space</dd>
+                </div>
+                <div>
+                  <dt>Pause / resume</dt>
+                  <dd>Esc</dd>
+                </div>
+              </dl>
+              <ul class="touch-guide">
+                <li><b>Steer</b> with the left stick.</li>
+                <li><b>Hold Cannon.</b> Slide onto Missile to fire both.</li>
+                <li><b>Hold</b> Boost or Brake. <b>Tap</b> Roll to evade.</li>
+                <li><b>Tap the camera name</b> to change views.</li>
+              </ul>
+              <div class="pause-tools">
               <button
                 id="fullscreen"
                 hidden
@@ -137,9 +158,8 @@
               >
                 ⛶ Fullscreen
               </button>
-              <button id="audio" title="Toggle all game audio" aria-pressed="true"><span id="audioIcon">♪</span> Sound on</button>
-              <button id="music" title="Toggle the flight soundtrack" aria-pressed="true">Music on</button>
-            </div>
+              </div>
+            </section>
           </div>
           <div id="actions"></div>
         </div>

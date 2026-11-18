@@ -144,6 +144,21 @@ const patrol = (() => {
     PatrolAudio.toggleMusic();
     syncSoundButton();
   };
+  for (const name of ["music", "effects"]) {
+    const slider = $(name + "Volume");
+    const value = $(name + "Percent");
+    slider.value = PatrolAudio.volume(name);
+    function showLevel() {
+      value.textContent = slider.value + "%";
+      slider.setAttribute("aria-valuetext", value.textContent);
+    }
+    slider.oninput = () => {
+      PatrolAudio.setVolume(name, slider.valueAsNumber);
+      showLevel();
+    };
+    slider.onchange = () => PatrolAudio.previewVolume(name);
+    showLevel();
+  }
   async function unlockSound() {
     if (PatrolAudio.enabled && !(await PatrolAudio.start()))
       toast("Audio unavailable. Use the sound button to retry.");
@@ -395,8 +410,10 @@ const patrol = (() => {
     lastPanel = key;
     const modal = $("modal");
     modal.classList.toggle("upgrade-draft", phase === "draft");
+    modal.classList.toggle("pause-menu", phase === "paused");
     $("pauseDetails").hidden = $("pauseRegion").hidden = phase !== "paused";
     modal.hidden = home || phase === "playing";
+    $("flight").inert = !modal.hidden;
     if (modal.hidden) return;
     clearInput();
     const actions = $("actions");
@@ -415,7 +432,7 @@ const patrol = (() => {
       });
     } else if (phase === "paused") {
       kicker = "Wave " + g.wave + " · " + g.missionTitle;
-      title = "Patrol paused";
+      title = "Paused";
       detail = touchMode && innerWidth > innerHeight && innerHeight <= 470 && g.bonus ? "Bonus · " + g.bonus : "";
       const equipment = g.loadout;
       $("pilotLevel").textContent = "Pilot level " + pilotLevel();
@@ -423,7 +440,7 @@ const patrol = (() => {
       loadout.replaceChildren();
       if (!equipment.length) {
         const empty = document.createElement("li");
-        empty.textContent = "Standard cannon and missiles. Choose your first upgrade after three kills.";
+        empty.textContent = "Standard cannon and missiles";
         loadout.append(empty);
       }
       for (const item of equipment) {
@@ -432,8 +449,8 @@ const patrol = (() => {
         loadout.append(row);
       }
       actions.append(
-        button("Resume patrol", pause, null, true),
-        button("End patrol and change region", flightDeck),
+        button("Resume", pause, null, true),
+        button("End", flightDeck),
       );
     } else if (phase === "won") {
       kicker = "Carrier destroyed";

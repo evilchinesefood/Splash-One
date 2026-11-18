@@ -196,6 +196,7 @@
       world,
       player: freshPlayer(),
       enemies: [],
+      allies: [],
       shots: [],
       particles: [],
       wisps: [],
@@ -236,6 +237,7 @@
       bonusIntact,
       gap,
       nextRaid;
+    let nextSupport = Infinity;
     let shotTimer = 0,
       recharge = 0,
       rollClock = 0,
@@ -282,6 +284,7 @@
         upgrades: Object.fromEntries(Object.keys(gear).map((id) => [id, 0])),
       });
       g.wisps.length = g.shots.length = g.particles.length = 0;
+      nextSupport = Infinity;
       offered = {};
       tailReady = guardReady = 0;
       shotTimer = recharge = rollClock = 0;
@@ -291,6 +294,7 @@
     }
     function nextWave() {
       g.wave++;
+      if (g.wave === 2) nextSupport = g.elapsed + 8 + Math.random() * 12;
       const key = sequence[g.wave - 1] || ["rush", "nest", "moons", "fleet"][(g.wave - g.waveCount - 1) % 4];
       mission = encounters[key];
       missionTime = group = gap = 0;
@@ -299,7 +303,7 @@
       g.state = "playing";
       g.missionTitle = mission.name;
       g.bonus = mission.bonus;
-      g.enemies.length = g.shots.length = 0;
+      g.allies.length = g.enemies.length = g.shots.length = 0;
       g.lockTarget = g.target = null;
       g.lockProgress = targetTimer = 0;
       spawnGroup();
@@ -468,7 +472,7 @@
       if (mission === encounters.fleet) unlock("arc");
       g.state = g.wave === g.waveCount ? "won" : "draft";
       g.choices = g.state === "draft" ? draftChoices() : [];
-      g.enemies.length = g.shots.length = 0;
+      g.allies.length = g.enemies.length = g.shots.length = 0;
       g.lockTarget = g.target = null;
       g.lockProgress = 0;
       sound(g.state === "won" ? "win" : "upgrade");
@@ -611,7 +615,7 @@
         sound(wet ? "splash" : "boom");
       }
     }
-    function damage(e, amount) {
+    function damage(e, amount, allied = false) {
       if (e.hp <= 0) return;
       e.hp -= amount;
       e.hitFlash = 0.23;
@@ -619,8 +623,8 @@
         particle("spark", e.x, e.y, e.z, 0.25, 3, 5, 12);
         return;
       }
-      g.kills++;
-      if (g.upgrades.siphon && g.player.hull > 0 && g.player.shield < 100) {
+      if (!allied) g.kills++;
+      if (!allied && g.upgrades.siphon && g.player.hull > 0 && g.player.shield < 100) {
         g.player.shield = Math.min(100, g.player.shield + 4 * g.upgrades.siphon);
         sound("shield");
       }
@@ -713,7 +717,7 @@
         f = forward(p),
         cannon = g.upgrades.cannon,
         rail = g.upgrades.missiles;
-      shotTimer = Math.max(0, shotTimer - dt);
+      shotTimer = shotTimer > 0 ? shotTimer - dt : 0;
       if (input.fire && shotTimer <= 0) {
         const sides = cannon === 3 ? [-4, 4] : [0];
         for (const offset of sides) {
@@ -724,7 +728,8 @@
           };
           shot("cannon", nose, f, p.speed + 615, cannon ? 16 : 11, 1.64);
         }
-        shotTimer = cannon >= 2 ? 0.087 : 0.122;
+        // Preserve fractional cooldown across ticks for a steady 25% reduction at either gun tier.
+        shotTimer += 1 / (cannon >= 2 ? 7.5 : 5.625);
         sound("cannon");
       }
       if (input.missile && p.missiles > 0) {
@@ -796,6 +801,64 @@
       }
       guardReady = g.time + [0, 3, 2, 1.5][level];
       sound("wisp");
+    }
+    function updateAllies(dt) {
+      const p = g.player, sinYaw = Math.sin(p.yaw), cosYaw = Math.cos(p.yaw);
+      if (!g.allies.length && g.elapsed >= nextSupport && g.enemies.some(e => e.hp > 0)) {
+        for (const side of [-1, 1]) {
+          g.allies.push({
+            side, age: 0, cooldown: 1.6 + side * 0.25, yaw: p.yaw, pitch: 0, bank: 0,
+            x: p.x + side * 135 * cosYaw - 80 * sinYaw, y: p.y + 38,
+            z: p.z - side * 135 * sinYaw - 80 * cosYaw,
+          });
+        }
+        nextSupport = g.elapsed + 75 + Math.random() * 35;
+        notify("message", "Friendly flight inbound · covering your wings");
+        sound("radio");
+      }
+      for (const a of g.allies) {
+        a.age += dt;
+        const leaving = a.age > 22;
+        if (leaving) {
+          a.yaw += a.side * 0.15 * dt;
+          a.bank = ease(a.bank, a.side * 0.46, 2, dt);
+          a.pitch = ease(a.pitch, 0.2, 2, dt);
+          a.x += Math.sin(a.yaw) * 240 * dt;
+          a.z += Math.cos(a.yaw) * 240 * dt;
+          a.y += 45 * dt;
+        } else {
+          const ahead = 52 + 6 * Math.sin(a.age * 0.6);
+          const side = a.side * 32;
+          a.x = ease(a.x, p.x + ahead * sinYaw + side * cosYaw, 2.8, dt) + p.speed * sinYaw * dt;
+          a.z = ease(a.z, p.z + ahead * cosYaw - side * sinYaw, 2.8, dt) + p.speed * cosYaw * dt;
+          a.y = ease(a.y, p.y + 8 + a.side * 2 + Math.sin(a.age), 3, dt);
+          a.yaw += angle(p.yaw - a.yaw) * (1 - Math.exp(-3 * dt));
+          a.bank = ease(a.bank, p.bank, 3, dt);
+          a.pitch = ease(a.pitch, p.pitch, 3, dt);
+        }
+        a.y = Math.max(a.y, world.height(a.x, a.z) + 9);
+        a.cooldown -= dt;
+        if (leaving || a.cooldown > 0) continue;
+        const forwardX = Math.sin(a.yaw), forwardZ = Math.cos(a.yaw);
+        const lock = g.lockProgress >= 1 && g.lockTarget?.hp > 0 ? g.lockTarget : null;
+        let target = null, reach = 720;
+        for (const enemy of g.enemies) {
+          if (enemy.hp <= 0) continue;
+          const d = distance(a, enemy);
+          const ahead = (enemy.x - a.x) * forwardX + (enemy.z - a.z) * forwardZ;
+          if (d > 720 || ahead < d * 0.45) continue;
+          if (enemy === lock) { target = enemy; break; }
+          if (d < reach) { target = enemy; reach = d; }
+        }
+        if (target) {
+          const lead = distance(a, target) / 590;
+          const intercept = { x: target.x + Math.sin(target.yaw) * target.speed * lead,
+            y: target.y, z: target.z + Math.cos(target.yaw) * target.speed * lead };
+          shot("ally", a, aim(a, intercept), 590, 8, 1.6);
+        }
+        a.cooldown = target ? 1.3 : 0.25;
+      }
+      if (g.allies.length && g.allies[0].age >= 28) g.allies.length = 0;
     }
     function updateWisps(dt) {
       const p = g.player,
@@ -971,7 +1034,7 @@
       s.z += dz * first;
       if (hit === g.player) hurt(s.power);
       else if (hit) {
-        damage(hit, s.power);
+        damage(hit, s.power, s.kind === "ally");
         if (s.kind === "cannon") {
           sound("hit");
           const level = g.upgrades.arc;
@@ -1055,6 +1118,7 @@
       targeting(dt);
       fireWeapons(dt, input);
       updateWisps(dt);
+      updateAllies(dt);
       tailTurret();
       orbitGuard();
       projectiles(dt);

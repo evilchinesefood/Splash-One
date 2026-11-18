@@ -18,15 +18,17 @@ Move the mouse to steer. In chase and cockpit views, the distance from center co
 | Cycle chase, cockpit, and north-up cameras | Space |
 | Pause or resume | Esc |
 
-On a phone, put your left thumb on the stick and drag from where it lands. Small movements make fine adjustments. Hold Cannon with your right thumb and slide onto Missile to launch while firing, or tap Missile on its own. Hold Boost or Brake to change speed, tap Roll to evade, and tap the camera name beside the missile count in the lower left to change views. Portrait keeps the thumb controls below the flight window. Launching starts the engine and an original synth score. The carrier finale adds a busier drum pattern. Pause to see your region, controls, pilot level, equipped upgrades, and audio controls. Sound mutes the whole game. Music lets you fly with effects alone. Both settings are remembered. Use the fullscreen button to expand the flight view.
+On a phone, put your left thumb on the stick and drag from where it lands. Small movements make fine adjustments. Hold Cannon with your right thumb and slide onto Missile to launch while firing, or tap Missile on its own. Hold Boost or Brake to change speed, tap Roll to evade, and tap the camera name beside the missile count in the lower left to change views. Portrait keeps the thumb controls below the flight window. Launching starts the engine and an original synth score. The carrier finale adds a busier drum pattern. Pause to see your region, controls, pilot level, equipped upgrades, and audio controls. Sound mutes the whole game. Music lets you fly with effects alone. Separate Music and Sound effects sliders set the mix from 0 to 100%. The game remembers both levels and mute settings in this browser. Use the fullscreen button to expand the flight view.
 
 ## Regions
 
-Choose a region and sky on the flight deck. Autumn Lake District has wooded islands and mountain lakes. Painted Mesa follows a turquoise river through terraced sandstone cliffs. Moonlight keeps each map’s terrain and adds stars, a crescent moon, cool reflections, and aircraft navigation lights. To choose another region during a run, pause and select **End patrol and change region**.
+Choose a region and sky on the flight deck. Autumn Lake District has wooded islands and mountain lakes. Painted Mesa follows a turquoise river through terraced sandstone cliffs. Moonlight keeps each map’s terrain and adds stars, a crescent moon, cool reflections, and aircraft navigation lights. To choose another region during a run, pause and select **End**.
 
 ## Patrols
 
 Destroy any three jets from the opening fighter formations to choose your first upgrade. The shortest route has five missions and a carrier finale. Patrol length is a pacing estimate. Longer routes add more missions before the carrier. The tracker leads you toward the current objective. Keep a contact near the nose to acquire a missile lock. The cannon and missile rails work independently.
+
+From wave two onward, two friendly jets occasionally radio in, fly off your wings, and fire at enemies ahead. They favor your locked target and peel away after a short visit. On the green cockpit radar, friendly and hostile contacts have distinct shapes.
 
 Shields recharge after a break from incoming hits. Each wave offers a bonus hull repair and a separate upgrade choice. Wing Wisps attack automatically. At level three, four wisps focus on a locked target if you also have Target Link. Tail Spark covers your rear, Orbit Guard intercepts incoming rounds, Kinetic Siphon restores shield on kills, and Split Salvo adds side bolts to a missile launch. Each has three ranks. Broadwing bombers fire slow amber spreads, Darts make quick attack passes, and Prism Towers signal their pulse volleys with a brightening diamond.
 
