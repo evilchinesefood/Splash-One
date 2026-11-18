@@ -343,6 +343,7 @@ const patrol = (() => {
     sync();
   }
   $("pause").onclick = pause;
+  $("viewName").onclick = changeView;
   function flightDeck() {
     clearInput();
     g = PatrolGame.create(world, notify);
@@ -362,16 +363,16 @@ const patrol = (() => {
       phase = paused ? "paused" : state;
     $("home").hidden = !home;
     $("flight").hidden = home;
-    $("pause").hidden = state !== "playing";
+    $("pause").hidden = !active();
     $("touch").hidden = !active() || !touchMode;
     PatrolAudio.flight(active(), g.player.boost);
     document.body.classList.toggle("steering", active());
     document.body.classList.toggle("flying", !home);
     document.body.classList.toggle("cockpit", !home && view === 1);
     const p = g.player;
-    $("viewName").hidden = home;
-    $("viewName").textContent = home ? "Chase cam" : viewNames[view] + "  ·  " + p.missiles + "/4 missiles";
     if (!home) {
+      $("viewName").textContent = viewNames[view];
+      $("missileCount").textContent = "Missiles " + p.missiles + "/4";
       $("wave").textContent =
         (g.wave > g.waveCount ? "Endless" : "Wave") +
         " " +
@@ -388,7 +389,7 @@ const patrol = (() => {
     lastPanel = key;
     const modal = $("modal");
     modal.classList.toggle("upgrade-draft", phase === "draft");
-    $("pauseDetails").hidden = phase !== "paused";
+    $("pauseDetails").hidden = $("pauseRegion").hidden = phase !== "paused";
     modal.hidden = home || phase === "playing";
     if (modal.hidden) return;
     clearInput();
@@ -557,8 +558,7 @@ const patrol = (() => {
       contact.radius = Math.max(1, stick.getBoundingClientRect().width * 0.4);
       input.x = input.y = 0;
       input.moved = true;
-    } else if (key === "view") changeView();
-    else if (key === "missile") input.missile = true;
+    } else if (key === "missile") input.missile = true;
     else if (key === "roll") input.roll = input.x < -0.1 ? -1 : 1;
     refreshTouchFeedback();
   }

@@ -58,30 +58,20 @@ button[hidden],
 body.flying #shade {
   opacity: 0;
 }
-header {
+#pause {
   position: absolute;
   z-index: 2;
-  left: 0;
-  right: 0;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 clamp(16px, 3.3vw, 64px);
-  background: #241f2bee;
-}
-header {
-  top: 0;
-  height: 56px;
-  border-bottom: 1px solid var(--line);
+  top: max(10px, env(safe-area-inset-top));
+  right: max(12px, env(safe-area-inset-right));
 }
 .region,
-.tools,
 .duration,
 .pad {
   display: flex;
   align-items: center;
 }
 .region {
+  margin-bottom: 12px;
   gap: 12px;
   font:
     700 11px/1.2 ui-monospace,
@@ -94,10 +84,8 @@ header {
   height: 30px;
   image-rendering: pixelated;
 }
-.tools {
-  gap: 8px;
-}
-.tools button,
+#pause,
+#viewName,
 .pause-tools button {
   padding: 7px 11px;
   background: transparent;
@@ -108,7 +96,8 @@ header {
     Menlo,
     monospace;
 }
-.tools button:hover,
+#pause:hover,
+#viewName:hover,
 .pause-tools button:hover {
   background: #4e3943;
 }
@@ -201,15 +190,8 @@ button.primary:hover,
   bottom: 0;
   left: 0;
 }
-#viewName {
-  text-align: right;
-  color: #ffd59e;
-  white-space: nowrap;
-}
-body.flying header {
-  height: 42px;
-  background: #211d29b5;
-}
+#pause, #viewName { background: #252030df; }
+#viewName { pointer-events: auto; width: 12ch; color: #ffd59e; white-space: nowrap; }
 #flight {
   position: absolute;
   inset: 0;
@@ -218,7 +200,7 @@ body.flying header {
 }
 #mission {
   position: absolute;
-  top: 58px;
+  top: max(10px, env(safe-area-inset-top));
   left: clamp(12px, 3.3vw, 64px);
   display: grid;
   gap: 4px;
@@ -244,15 +226,19 @@ body.flying header {
 #bonus:empty {
   display: none;
 }
-#meters {
+#flightStatus {
   position: absolute;
-  bottom: 48px;
-  left: 3.3vw;
-  display: grid;
-  gap: 3px;
-  background: #221e2ab8;
-  padding: 8px 10px;
+  z-index: 1;
+  bottom: max(12px, env(safe-area-inset-bottom));
+  left: clamp(12px, 3.3vw, 64px);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 8px;
+  background: #221e2acd;
 }
+.readouts, #meters { display: grid; gap: 3px; }
+#missileCount { font: bold 11px ui-monospace, Menlo, monospace; }
 #meters > div {
   display: flex;
   align-items: center;
@@ -357,16 +343,14 @@ h2 {
   outline-offset: 0;
 }
 /* Thumb controls remain outside the desktop interface. */
-.touch-view { display: none; }
 body.touch-active {
   --edge-left: max(12px, env(safe-area-inset-left));
   --edge-right: max(12px, env(safe-area-inset-right));
   --edge-bottom: max(8px, env(safe-area-inset-bottom));
-  --shelf: calc(122px + env(safe-area-inset-bottom));
+  --shelf: calc(176px + env(safe-area-inset-bottom));
 }
 .touch-active #stage { min-height: 0; }
 .touch-active.steering #stage { touch-action: none; }
-.touch-active.steering .touch-view { display: inline-block; }
 #touch { position: absolute; inset: 0; pointer-events: none; }
 #stick, .pad button {
   pointer-events: auto;
@@ -429,9 +413,6 @@ body.touch-active {
   border-color: #fff3d3;
 }
 @media (max-width: 740px) {
-  header {
-    height: 44px;
-  }
   .region {
     font-size: 9px;
     gap: 5px;
@@ -440,15 +421,11 @@ body.touch-active {
     width: 29px;
     height: 24px;
   }
-  .tools button {
-    font-size: 10px;
-  }
   #home {
     left: 6%;
     width: min(420px, 85vw);
   }
   #mission {
-    top: 48px;
     padding: 6px 9px;
     max-width: 67vw;
   }
@@ -481,9 +458,6 @@ body.touch-active {
   }
   .panel {
     padding: 13px;
-  }
-  header {
-    height: 37px;
   }
   .panel p {
     margin: 6px 0;
@@ -588,11 +562,6 @@ body.cockpit #meters {
     Menlo,
     monospace;
 }
-@media (max-width: 480px) {
-  #viewName {
-    font-size: 9px;
-  }
-}
 
 .route-settings {
   display: flex;
@@ -647,25 +616,20 @@ body.cockpit #meters {
 }
 
 /* Native menus can scroll; only the active flight surface traps drags. */
-.touch-active header, .touch-active.flying header {
-  height: calc(46px + env(safe-area-inset-top));
-  padding: env(safe-area-inset-top) var(--edge-right) 0 var(--edge-left);
-}
-.touch-active .tools { gap: 5px; }
-.touch-active .tools button,
+.touch-active :is(#viewName, #pause),
 .touch-active :is(.duration, .pause-tools) button,
 .touch-active :is(.deck-setting select, #launch, .action) {
   min-height: 44px;
   min-width: 44px;
 }
 .touch-active #mission {
-  top: calc(52px + env(safe-area-inset-top));
+  top: max(8px, env(safe-area-inset-top));
   left: var(--edge-left);
   max-width: min(62vw, 340px);
   padding: 5px 8px;
   gap: 2px;
 }
-.touch-active #meters {
+.touch-active #flightStatus {
   left: var(--edge-left);
   bottom: calc(var(--edge-bottom) + 119px);
 }
@@ -690,9 +654,8 @@ body.cockpit #meters {
     width: 100%;
     border-bottom: 1px solid var(--line);
   }
-  .touch-active #meters { bottom: calc(var(--shelf) + 8px); }
+  .touch-active #flightStatus { bottom: calc(var(--shelf) - 56px); }
   .touch-active #toast { bottom: calc(var(--shelf) + 12%); }
-  .touch-active.flying #regionName { display: none; }
   .touch-active #home {
     left: var(--edge-left);
     width: calc(100% - var(--edge-right) - var(--edge-left));
@@ -702,7 +665,7 @@ body.cockpit #meters {
 @media (orientation: landscape) and (max-height: 520px) {
   .touch-active #home {
     left: var(--edge-left);
-    top: calc(49px + env(safe-area-inset-top));
+    top: max(8px, env(safe-area-inset-top));
     bottom: var(--edge-bottom);
     width: min(440px, calc(100% - var(--edge-left) - var(--edge-right)));
     transform: none;
@@ -712,11 +675,6 @@ body.cockpit #meters {
   .touch-active #wordmark { width: 178px; }
   .touch-active .lede { font-size: 12px; line-height: 1.25; margin-block: 3px 6px; }
   .touch-active #mission { max-width: 48vw; }
-  .touch-active #meters {
-    bottom: auto; left: auto; top: calc(53px + env(safe-area-inset-top)); right: var(--edge-right);
-    padding: 4px 7px;
-  }
-  .touch-active #viewName { font-size: 10px; }
 }
 
 

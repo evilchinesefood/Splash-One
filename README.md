@@ -18,7 +18,7 @@ Move the mouse to steer. In chase and cockpit views, the distance from center co
 | Cycle chase, cockpit, and north-up cameras | Space |
 | Pause or resume | Esc |
 
-On a phone, put your left thumb on the stick and drag from where it lands. Small movements make fine adjustments. Hold Cannon with your right thumb and slide onto Missile to launch while firing, or tap Missile on its own. Hold Boost or Brake to change speed, tap Roll to evade, and tap View in the header to change cameras. Portrait keeps the thumb controls below the flight window. Starting a patrol enables synthesized sound. Pause to see controls, pilot level, equipped upgrades, and the sound toggle. The game remembers your mute preference. Use the fullscreen button to expand the flight view.
+On a phone, put your left thumb on the stick and drag from where it lands. Small movements make fine adjustments. Hold Cannon with your right thumb and slide onto Missile to launch while firing, or tap Missile on its own. Hold Boost or Brake to change speed, tap Roll to evade, and tap the camera name beside the missile count in the lower left to change views. Portrait keeps the thumb controls below the flight window. Starting a patrol enables synthesized sound. Pause to see your region, controls, pilot level, equipped upgrades, and the sound toggle. The game remembers your mute preference. Use the fullscreen button to expand the flight view.
 
 ## Regions
 
@@ -39,7 +39,7 @@ Milestones add gear to the upgrade pool using browser-local storage. After defea
 - `art.js` draws projected aircraft, weapon effects, targeting cues, and cockpit instruments from simulation state.
 - `upgrades.js` and `upgrades.css` draw equipment icons and the between-wave upgrade cards.
 - `audio.js` synthesizes the engine and combat sounds using Web Audio.
-- `main.js` connects controls, cameras, audio, and the fixed-step game loop. The menus and control strip live in `index.html` and `patrol.css`.
+- `main.js` connects controls, cameras, audio, and the fixed-step game loop. The menus and flight readouts live in `index.html` and `patrol.css`.
 
 ## Deployment
 

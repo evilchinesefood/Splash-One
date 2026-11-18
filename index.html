@@ -20,17 +20,7 @@
     <main id="stage" aria-label="Patrol fighter jet game">
       <canvas id="world" aria-hidden="true"></canvas><canvas id="art" aria-hidden="true"></canvas>
       <div id="shade"></div>
-      <header>
-        <div class="region">
-          <canvas class="crest" width="32" height="26" aria-hidden="true"></canvas
-          ><span id="regionName">AUTUMN LAKE DISTRICT</span>
-        </div>
-        <div class="tools">
-          <span id="viewName" hidden></span>
-          <button type="button" class="touch-view" data-control="view" aria-label="Change camera view">View</button>
-          <button id="pause" hidden title="Pause (Esc)">Ⅱ <span>Pause</span></button>
-        </div>
-      </header>
+      <button id="pause" type="button" hidden title="Pause (Esc)">Ⅱ Pause</button>
       <section id="home" aria-label="Start patrol">
         <h1 aria-label="Patrol">
           <canvas id="wordmark" width="200" height="42" aria-hidden="true"></canvas>
@@ -72,14 +62,24 @@
           <div id="wave"></div>
           <strong id="missionTitle"></strong><span id="objective"></span><small id="bonus"></small>
         </div>
-        <div id="meters">
-          <div><label for="shield">Shield</label><meter id="shield" max="100"></meter></div>
-          <div><label for="hull">Hull</label><meter id="hull" max="100"></meter></div>
+        <div id="flightStatus">
+          <button id="viewName" type="button" title="Change camera view (Space)"></button>
+          <div class="readouts">
+            <span id="missileCount"></span>
+            <div id="meters">
+              <div><label for="shield">Shield</label><meter id="shield" max="100"></meter></div>
+              <div><label for="hull">Hull</label><meter id="hull" max="100"></meter></div>
+            </div>
+          </div>
         </div>
       </div>
       <div id="toast" role="status"></div>
       <section id="modal" class="modal" aria-modal="true" role="dialog" aria-labelledby="modalTitle" hidden>
         <div class="panel">
+          <div class="region" id="pauseRegion" hidden>
+            <canvas class="crest" width="32" height="26" aria-hidden="true"></canvas>
+            <span id="regionName">AUTUMN LAKE DISTRICT</span>
+          </div>
           <div class="eyebrow" id="modalKicker"></div>
           <h2 id="modalTitle"></h2>
           <p id="modalText"></p>
@@ -125,7 +125,7 @@
               </div>
             </dl>
             <p class="touch-guide">
-              Rest your left thumb on the stick and drag gently to aim. Hold Cannon with your right thumb, then slide onto Missile to launch while firing. You can also tap Missile or Roll, hold Boost or Brake, and tap View to change cameras.
+              Rest your left thumb on the stick and drag gently to aim. Hold Cannon with your right thumb, then slide onto Missile to launch while firing. You can also tap Missile or Roll, hold Boost or Brake, and tap the camera name beside the missile count to change views.
             </p>
             <div class="pause-tools">
               <button
