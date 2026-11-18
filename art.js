@@ -1,0 +1,1557 @@
+/* Pixel aircraft, projected effects, and flight instruments. World distances use the simulation's units. */
+(() => {
+  "use strict";
+  const TAU = Math.PI * 2;
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const saturate = (v) => clamp(v, 0, 1);
+  const dark = "#25243b",
+    amber = "#ffd288",
+    ice = "#91f4df";
+  const slate = ["#394055", "#536073", "#738797", "#9babb0"];
+  const steel = ["#4e5264", "#73828e", "#aab6b4", "#d0d8c8"];
+  const gold = ["#63444d", "#985e4d", "#e0a05e", "#ffe4a3"];
+  const red = ["#64394c", "#a84749", "#e75a46", "#ff9d66"];
+  const enemyMetal = ["#42384f", "#605369", "#9a8085", "#d0ab9e"];
+  const night = ["#25293e", "#39415a", "#576578", "#8291a1"];
+
+  const glyphs = {
+    0: "75757",
+    1: "26227",
+    2: "71747",
+    3: "71717",
+    4: "55711",
+    5: "74717",
+    6: "74757",
+    7: "71111",
+    8: "75757",
+    9: "75717",
+    A: "25755",
+    B: "65656",
+    C: "74447",
+    D: "65556",
+    E: "74647",
+    F: "74644",
+    G: "74557",
+    H: "55755",
+    I: "72227",
+    J: "11157",
+    K: "55655",
+    L: "44447",
+    M: "57755",
+    N: "57555",
+    O: "75557",
+    P: "65744",
+    Q: "75573",
+    R: "65755",
+    S: "74717",
+    T: "72222",
+    U: "55557",
+    V: "55552",
+    W: "55775",
+    X: "55255",
+    Y: "55222",
+    Z: "71247",
+    "-": "00700",
+    "+": "02720",
+    ".": "00002",
+    ":": "02020",
+    "/": "11244",
+    " ": "00000",
+  };
+  function label(ctx, s, x, y, color, align = "left") {
+    s = String(s).toUpperCase();
+    x = Math.round(x - (align === "center" ? (s.length * 4 - 1) / 2 : align === "right" ? s.length * 4 - 1 : 0));
+    y = Math.round(y);
+    ctx.fillStyle = color;
+    for (const c of s) {
+      const rows = glyphs[c] || glyphs[" "];
+      for (let j = 0; j < 5; j++) {
+        const n = +rows[j];
+        for (let i = 0; i < 3; i++) if (n & (4 >> i)) ctx.fillRect(x + i, y + j, 1, 1);
+      }
+      x += 4;
+    }
+  }
+
+  function line(ctx, x0, y0, x1, y1, color, width = 1) {
+    if (![x0, y0, x1, y1].every(Number.isFinite)) return;
+    // Clip before rasterizing so a near-plane crossing cannot create a long pixel loop.
+    const w = ctx.canvas.width + 3,
+      h = ctx.canvas.height + 3;
+    let lo = 0,
+      hi = 1,
+      vx = x1 - x0,
+      vy = y1 - y0;
+    for (const [p, q] of [
+      [-vx, x0 + 3],
+      [vx, w - x0],
+      [-vy, y0 + 3],
+      [vy, h - y0],
+    ]) {
+      if (!p) {
+        if (q < 0) return;
+        continue;
+      }
+      const u = q / p;
+      if (p < 0) lo = Math.max(lo, u);
+      else hi = Math.min(hi, u);
+      if (lo > hi) return;
+    }
+    x1 = Math.round(x0 + hi * vx);
+    y1 = Math.round(y0 + hi * vy);
+    x0 = Math.round(x0 + lo * vx);
+    y0 = Math.round(y0 + lo * vy);
+    const dx = Math.abs(x1 - x0),
+      sx = x0 < x1 ? 1 : -1,
+      dy = -Math.abs(y1 - y0),
+      sy = y0 < y1 ? 1 : -1;
+    let e = dx + dy;
+    ctx.fillStyle = color;
+    while (true) {
+      ctx.fillRect(x0, y0, width, width);
+      if (x0 === x1 && y0 === y1) break;
+      const ee = 2 * e;
+      if (ee >= dy) {
+        e += dy;
+        x0 += sx;
+      }
+      if (ee <= dx) {
+        e += dx;
+        y0 += sy;
+      }
+    }
+  }
+
+  function polygon(ctx, points, color) {
+    ctx.beginPath();
+    ctx.moveTo(Math.round(points[0][0]), Math.round(points[0][1]));
+    for (let i = 1; i < points.length; i++) ctx.lineTo(Math.round(points[i][0]), Math.round(points[i][1]));
+    ctx.closePath();
+    ctx.fillStyle = color;
+    ctx.fill();
+  }
+  function disc(ctx, x, y, r, color) {
+    r = Math.max(0, Math.round(r));
+    x = Math.round(x);
+    y = Math.round(y);
+    ctx.fillStyle = color;
+    for (let dy = -r; dy <= r; dy++) {
+      const a = Math.floor(Math.sqrt(r * r - dy * dy));
+      ctx.fillRect(x - a, y + dy, 2 * a + 1, 1);
+    }
+  }
+  function basis(e) {
+    const y = e.yaw || 0,
+      p = e.pitch || 0,
+      b = (e.bank || 0) + (e.roll || 0);
+    const sy = Math.sin(y),
+      cy = Math.cos(y),
+      sp = Math.sin(p),
+      cp = Math.cos(p),
+      sb = Math.sin(b),
+      cb = Math.cos(b);
+    return {
+      r: [cy * cb + sy * sp * sb, -cp * sb, -sy * cb + cy * sp * sb],
+      u: [cy * sb - sy * sp * cb, cp * cb, -sy * sb - cy * sp * cb],
+      f: [sy * cp, sp, cy * cp],
+    };
+  }
+  function transform(e, b, v) {
+    const [x, y, z] = v;
+    return [
+      e.x + x * b.r[0] + y * b.u[0] + z * b.f[0],
+      e.y + x * b.r[1] + y * b.u[1] + z * b.f[1],
+      e.z + x * b.r[2] + y * b.u[2] + z * b.f[2],
+    ];
+  }
+
+  // Lofted fuselages, nacelles and canopy share the same cross-section profile.
+  function surface(mesh, points, c, flags = "") {
+    mesh.push({ points, c, flags });
+  }
+  function loft(mesh, sections, palette, flags = "") {
+    const rings = sections.map(([z, x, y, w, h]) => [
+      [x, y + h, z],
+      [x + w * 0.79, y + h * 0.68, z],
+      [x + w, y, z],
+      [x + w * 0.6, y - h * 0.85, z],
+      [x - w * 0.6, y - h * 0.85, z],
+      [x - w, y, z],
+      [x - w * 0.79, y + h * 0.68, z],
+    ]);
+    for (let k = 1; k < rings.length; k++) {
+      for (let i = 0; i < 7; i++) {
+        const j = (i + 1) % 7;
+        surface(
+          mesh,
+          [rings[k - 1][i], rings[k][i], rings[k][j], rings[k - 1][j]],
+          palette[[3, 2, 1, 0, 0, 1, 2][i]],
+          flags,
+        );
+      }
+    }
+    surface(mesh, rings[0], palette[0], flags);
+    surface(mesh, rings[rings.length - 1], palette[1], flags);
+  }
+  const jetNozzle = { x: 1.48, y: -0.13, z: -9.5, width: 0.74, height: 0.66 };
+  const carrierNozzle = { x: 21, y: -0.8, z: -45, width: 5, height: 4 };
+  function buildJet(hostile = false) {
+    const mesh = [],
+      body = hostile ? enemyMetal : steel,
+      trim = hostile ? red : slate;
+    loft(
+      mesh,
+      [
+        [-8.2, 0, 0.02, 1.66, 0.68],
+        [-4, 0, 0.18, 1.96, 0.98],
+        [2, 0, 0.25, 1.54, 1],
+        [6.9, 0, 0.16, 0.91, 0.64],
+      ],
+      body,
+    );
+    loft(
+      mesh,
+      [
+        [6.9, 0, 0.16, 0.92, 0.66],
+        [11.9, 0, 0.15, 0.06, 0.06],
+      ],
+      night,
+    );
+    loft(
+      mesh,
+      [
+        [1.25, 0, 1, 1.1, 0.12],
+        [2.7, 0, 1.1, 1.12, 1.03],
+        [4.6, 0, 1.04, 0.8, 0.79],
+        [6.45, 0, 0.72, 0.43, 0.1],
+      ],
+      gold,
+    );
+    for (const s of [-1, 1]) {
+      const at = (x, y, z) => [s * x, y, z];
+      // Delta wing with raised root, splinter field, wingtip flash, and a small squadron stripe.
+      surface(
+        mesh,
+        [at(1.23, 0.22, 5.3), at(8.94, -0.27, -3.53), at(8.48, -0.34, -5.03), at(2, -0.02, -5.57)],
+        body[2],
+      );
+      surface(mesh, [at(1.23, 0.23, 5.3), at(4.25, 0.02, 0.6), at(3, 0.18, -3.3), at(1.8, 0.25, -0.95)], trim[2]);
+      surface(
+        mesh,
+        [
+          at(4.25, 0.04, 0.6),
+          at(6.86, -0.15, -1.76),
+          at(5.23, -0.077, -2.32),
+          at(6.72, -0.17, -4.79),
+          at(3.0, 0.13, -3.3),
+        ],
+        trim[1],
+      );
+      surface(
+        mesh,
+        [at(8.0, -0.2, -2.48), at(8.94, -0.27, -3.53), at(8.49, -0.34, -5.03), at(7.76, -0.23, -5.07)],
+        red[2],
+      );
+      surface(
+        mesh,
+        [at(6.55, -0.13, -3.1), at(7.37, -0.16, -3.49), at(7.33, -0.16, -3.83), at(6.42, -0.13, -3.43)],
+        body[3],
+      );
+      surface(
+        mesh,
+        [at(1.61, 0.15, -4.6), at(4.9, -0.12, -7.45), at(5.15, -0.12, -9.35), at(1.44, 0.18, -8.4)],
+        trim[2],
+      );
+      surface(
+        mesh,
+        [at(2.3, 0.17, -6.28), at(4.9, -0.105, -7.45), at(5.15, -0.105, -9.35), at(3.72, 0.04, -8.94)],
+        body[2],
+      );
+      // Twin square intake shoulders taper into faceted engine housings and separate nozzles.
+      loft(
+        mesh,
+        [
+          [-8.85, s * 1.47, -0.13, 0.84, 0.76],
+          [-6.3, s * 1.46, -0.08, 1.04, 1.03],
+          [-1, s * 1.37, 0.04, 1.05, 0.84],
+          [3.57, s * 1.23, 0.02, 0.64, 0.53],
+        ],
+        trim,
+      );
+      loft(
+        mesh,
+        [
+          [jetNozzle.z, s * jetNozzle.x, jetNozzle.y, jetNozzle.width, jetNozzle.height],
+          [-8.68, s * 1.47, -0.13, 0.85, 0.77],
+        ],
+        night,
+      );
+      surface(mesh, [at(0.83, 0.63, 3.55), at(1.74, 0.5, 3.44), at(2.07, 0.32, 1.9), at(1.0, 0.86, 1.1)], body[2]);
+      // Tall canted twin fins make the rear silhouette readable against the terrain.
+      surface(
+        mesh,
+        [at(1.6, 0.73, -3.65), at(2.76, 3.98, -6.85), at(2.98, 4.02, -8.54), at(2.05, 0.68, -8.22)],
+        trim[s > 0 ? 2 : 1],
+      );
+      surface(
+        mesh,
+        [at(2.6, 3.4, -6.26), at(2.76, 3.98, -6.85), at(2.98, 4.02, -8.54), at(2.84, 3.39, -8.48)],
+        red[2],
+      );
+      surface(
+        mesh,
+        [at(2.3, 2.52, -6.55), at(2.64, 2.63, -7.97), at(2.62, 2.36, -7.96), at(2.2, 2.25, -6.4)],
+        body[3],
+      );
+      // Two visible wing stores per side disappear from their rails as missiles fire.
+      for (let j = 0; j < 2; j++) {
+        const x = s * (j ? 6.25 : 4.1),
+          z = j ? -1.72 : -0.3,
+          flag = "rail" + (s < 0 ? j : 3 - j);
+        loft(
+          mesh,
+          [
+            [z - 2, x, -0.65, 0.18, 0.19],
+            [z + 1, x, -0.66, 0.24, 0.24],
+            [z + 1.8, x, -0.64, 0.01, 0.01],
+          ],
+          steel,
+          flag,
+        );
+        surface(
+          mesh,
+          [
+            [x - 0.53, -0.64, z - 1.77],
+            [x, -0.64, z - 0.62],
+            [x + 0.54, -0.64, z - 1.77],
+          ],
+          night[2],
+          flag,
+        );
+      }
+    }
+    return mesh;
+  }
+  const jetMesh = buildJet(),
+    rivalMesh = buildJet(true);
+  function buildCrescent() {
+    const mesh = [];
+    for (const s of [-1, 1]) {
+      const v = (x, y, z) => [s * x, y, z];
+      surface(
+        mesh,
+        [
+          v(0, 0.9, 2.5),
+          v(3.1, 0.97, 2.1),
+          v(6.5, 0.5, 0.6),
+          v(9.5, -0.1, -4.8),
+          v(6.2, 0.04, -2.6),
+          v(2.7, 0.03, -1.1),
+          v(0, 0.15, -2.5),
+        ],
+        night[2],
+      );
+      surface(
+        mesh,
+        [
+          v(0, 0.9, 2.5),
+          v(3.1, 0.97, 2.1),
+          v(6.5, 0.5, 0.6),
+          v(9.5, -0.1, -4.8),
+          v(5.7, 0.65, -0.1),
+          v(1.6, 1.11, 1.15),
+        ],
+        steel[2],
+      );
+      surface(mesh, [v(3.1, 0.88, 1.86), v(5.5, 0.6, 1.12), v(8.8, 0.1, -3.45), v(6.12, 0.5, -0.27)], "#e58a6c");
+      surface(mesh, [v(0, 0.18, -2.55), v(2.85, 0.15, -1.16), v(4.2, 0.1, -1.64), v(0.2, 0.15, -3.1)], "#e65f96");
+    }
+    loft(
+      mesh,
+      [
+        [-2.55, 0, 0.5, 0.7, 0.41],
+        [0.5, 0, 0.67, 1.23, 0.87],
+        [3.1, 0, 0.63, 0.09, 0.2],
+      ],
+      night,
+    );
+    loft(
+      mesh,
+      [
+        [0.44, 0, 1.3, 0.31, 0.18],
+        [1.5, 0, 1.13, 0.32, 0.19],
+      ],
+      gold,
+    );
+    return mesh;
+  }
+  function buildCarrier() {
+    const m = [];
+    loft(
+      m,
+      [
+        [-47, 0, 0, 12, 4],
+        [-26, 0, 1, 21, 7],
+        [15, 0, 2, 17, 7],
+        [47, 0, 1, 7, 3],
+        [54, 0, 0, 0.6, 0.6],
+      ],
+      night,
+    );
+    for (const s of [-1, 1]) {
+      const v = (x, y, z) => [s * x, y, z];
+      surface(m, [v(10, 4, 31), v(39, 2, 7), v(54, 0, -26), v(40, 0, -36), v(12, 3, -24)], slate[2]);
+      surface(m, [v(11, 4, 28), v(38, 2, 7), v(46, 1, -10), v(35, 2, -7), v(26, 3, 4)], steel[2]);
+      surface(m, [v(13, 3, -8), v(34, 2, -7), v(45, 1, -22), v(37, 1, -27), v(15, 4, -17)], night[0]);
+      for (let j = 0; j < 3; j++)
+        surface(
+          m,
+          [
+            v(19 + j * 6, 3, -14 - j),
+            v(21 + j * 6, 3, -14 - j),
+            v(24 + j * 6, 3, -19 - j),
+            v(22 + j * 6, 3, -19 - j),
+          ],
+          "#ff9765",
+        );
+      loft(
+        m,
+        [
+          [carrierNozzle.z, s * carrierNozzle.x, carrierNozzle.y, carrierNozzle.width, carrierNozzle.height],
+          [-26, s * 21, 2, 6, 6],
+          [7, s * 19, 2.5, 4.5, 4],
+          [18, s * 17, 2, 0.3, 0.3],
+        ],
+        slate,
+      );
+      surface(m, [v(16, 6, -11), v(23, 17, -30), v(23, 17, -41), v(17, 5, -36)], steel[1]);
+      surface(m, [v(21.5, 15, -27), v(23, 17, -30), v(23, 17, -41), v(22, 15, -41)], red[2]);
+      surface(m, [v(2, 8, 1), v(7, 8, 4), v(5, 7, 29), v(2, 7, 31)], gold[2]);
+    }
+    return m;
+  }
+  const crescentMesh = buildCrescent(),
+    carrierMesh = buildCarrier();
+  function tower(kind) {
+    const m = [],
+      radar = kind === "radar",
+      a = radar ? 7 : 4,
+      h = radar ? 10 : 14;
+
+    const corners = (w, y) => [
+      [-w, y, -w],
+      [w, y, -w],
+      [w, y, w],
+      [-w, y, w],
+    ];
+    let prev = corners(a + 2, 0);
+    for (const [w, y] of [
+      [a, 2],
+      [a * 0.8, h * 0.42],
+      [a * 0.47, h],
+    ]) {
+      const next = corners(w, y);
+      for (let i = 0; i < 4; i++) surface(m, [prev[i], prev[(i + 1) % 4], next[(i + 1) % 4], next[i]], slate[i]);
+      surface(m, next, steel[2]);
+      prev = next;
+    }
+    if (radar) {
+      for (let i = 0; i < 8; i++) {
+        const face = (i) => [
+          Math.cos((i * TAU) / 8) * 8,
+          h + 4 + Math.sin((i * TAU) / 8) * 5,
+          Math.sin((i * TAU) / 8) * 3,
+        ];
+        surface(m, [[0, h + 3, -3], face(i), face(i + 1)], steel[((i + 1) % 3) + 1]);
+      }
+    } else {
+      surface(
+        m,
+        [
+          [-0.65, h, 0],
+          [0.1, h + 12, 0],
+          [0.75, h, 0],
+        ],
+        steel[3],
+      );
+      surface(
+        m,
+        [
+          [-1.8, h + 7, 0],
+          [0, h + 9, 0],
+          [1.8, h + 7, 0],
+        ],
+        red[3],
+      );
+    }
+    return m;
+  }
+  function buildBroadwing() {
+    const mesh = [];
+    loft(mesh, [[-10,0,0,3,1.4],[-3,0,.4,4.2,2.2],[7,0,0,3,1.5],[13,0,-.3,.4,.5]], enemyMetal);
+    loft(mesh, [[4,0,1.4,2,.4],[8,0,1.4,1.7,1],[10,0,1,1,.4]], gold);
+    for (const sign of [-1,1]) {
+      const v = (x,y,z) => [sign*x,y,z];
+      surface(mesh,[v(2,1,7),v(19,.4,0),v(24,-.5,-7),v(9,-.4,-5),v(2,0,-9)],steel[2]);
+      surface(mesh,[v(2,1,7),v(19,.4,0),v(17,.6,-2),v(2,1,3)],gold[2]);
+      surface(mesh,[v(2,0,-9),v(9,-.4,-5),v(24,-.5,-7),v(13,-1,-8)],enemyMetal[1]);
+      loft(mesh,[[-9,sign*8,-.3,1.6,1.1],[-1,sign*8,-.3,1.8,1.6],[4,sign*8,-.3,.5,.5]],night);
+      surface(mesh,[v(2.3,1,-3),v(5.3,4.6,-10),v(5.7,3.6,-13),v(3,.6,-10)],red[1]);
+    }
+    return mesh;
+  }
+  function buildDart() {
+    const mesh = [];
+    loft(mesh,[[-7,0,0,1.5,1],[-2,0,.4,2,1.6],[6,0,.3,.8,1],[14,0,.2,.1,.1]],slate);
+    for (const sign of [-1,1]) {
+      const v = (x,y,z) => [sign*x,y,z];
+      surface(mesh,[v(.7,.7,7),v(6.5,-.1,-8),v(4,.5,-5),v(1.8,.4,-3)],steel[2]);
+      surface(mesh,[v(.8,.8,5),v(5.5,.2,-5),v(4,.6,-4),v(1.2,1,1)],"#5ed8c8");
+      surface(mesh,[v(1,1,0),v(2.9,3.7,-6),v(2.9,2.4,-8),v(1,1,-5)],night[2]);
+    }
+    surface(mesh,[[-.72,1.5,1],[0,2.15,2],[.72,1.5,1],[0,1.1,6]],"#9aeace");
+    return mesh;
+  }
+  function buildPrism() {
+    const mesh = [];
+    const lower = [[-8,0,-8],[8,0,-8],[8,0,8],[-8,0,8]];
+    const gem = [[-6,24,0],[0,24,6],[6,24,0],[0,24,-6]];
+    for (let i=0;i<4;i++) {
+      const j=(i+1)%4;
+      const shoulder = lower[i].map((v,k) => k===1?10:v*.65);
+      const shoulderNext = lower[j].map((v,k) => k===1?10:v*.65);
+      surface(mesh,[lower[i],lower[j],shoulderNext,shoulder],slate[i]);
+      surface(mesh,[shoulder,shoulderNext,[0,17,0]],steel[i]);
+      surface(mesh,[[0,14,0],gem[i],gem[j]],["#733b82","#a556ad","#643a84","#ac68c0"][i]);
+      surface(mesh,[[0,35,0],gem[j],gem[i]],["#f5a8f4","#b589e6","#d184db","#965cc0"][i],"lamp");
+    }
+    return mesh;
+  }
+  const contactNames = { bomber: "BROADWING", dart: "DART", prism: "PRISM" };
+  const meshes = {
+    jet: rivalMesh,
+    interceptor: rivalMesh,
+    bomber: buildBroadwing(),
+    dart: buildDart(),
+    prism: buildPrism(),
+    carrier: carrierMesh,
+    crescent: crescentMesh,
+    radar: tower("radar"),
+    relay: tower("relay"),
+  };
+
+  const nightColors = new Map();
+  function moonlit(color) {
+    if (!nightColors.has(color)) {
+      const value = parseInt(color.slice(1),16);
+      const red = Math.round((value >> 16) * .56 + 9);
+      const green = Math.round(((value >> 8) & 255) * .64 + 13);
+      const blue = Math.min(255, Math.round((value & 255) * .81 + 26));
+      nightColors.set(color, "rgb(" + [red,green,blue].join(",") + ")");
+    }
+    return nightColors.get(color);
+  }
+  function drawMesh(ctx, e, mesh, b, project, count, atNight) {
+    const faces = [],
+      cache = new Map();
+    for (const face of mesh) {
+      if (face.flags.startsWith("rail") && +face.flags.slice(4) >= count) continue;
+      const pts = [];
+      for (const v of face.points) {
+        let p = cache.get(v);
+        if (!p) {
+          p = project(...transform(e, b, v));
+          if (p) cache.set(v, p);
+        }
+        if (!p) break;
+        pts.push(p);
+      }
+      if (pts.length === face.points.length)
+        faces.push({ pts, c: face.c, glowing: face.flags === "exhaust" || face.flags === "lamp", depth: pts.reduce((s, p) => s + p.d, 0) / pts.length });
+    }
+    faces.sort((a, b) => b.depth - a.depth);
+    const path = (pts) => {
+      ctx.beginPath();
+      ctx.moveTo(Math.round(pts[0].x), Math.round(pts[0].y));
+      for (let j = 1; j < pts.length; j++) ctx.lineTo(Math.round(pts[j].x), Math.round(pts[j].y));
+      ctx.closePath();
+    };
+    // One silhouette outline, keeping the interior facets bright and uncluttered.
+    ctx.strokeStyle = dark;
+    ctx.lineWidth = 1.7;
+    ctx.lineJoin = "round";
+    ctx.beginPath();
+    for (const { pts, glowing } of faces) {
+      if (glowing) continue;
+      ctx.moveTo(Math.round(pts[0].x), Math.round(pts[0].y));
+      for (let j = 1; j < pts.length; j++) ctx.lineTo(Math.round(pts[j].x), Math.round(pts[j].y));
+      ctx.closePath();
+    }
+    ctx.stroke();
+    const flashing = e.kind && e.hitFlash > 0.15;
+    for (const { pts, c, glowing } of faces) {
+      path(pts);
+      ctx.fillStyle = flashing && !glowing ? "#fff2bf" : atNight && !glowing ? moonlit(c) : c;
+      ctx.fill();
+      ctx.strokeStyle = ctx.fillStyle;
+      ctx.lineWidth = 0.7;
+      ctx.stroke();
+    }
+  }
+
+  const histories = new WeakMap();
+  function trailState(g, b, e = g.player) {
+    let s = histories.get(e);
+    if (!s || g.time < s.t || Math.hypot(e.x - s.x, e.z - s.z) > 200) {
+      s = { t: -1, x: e.x, z: e.z, samples: [] };
+      histories.set(e, s);
+    }
+    if (g.time - s.t > 0.046) {
+      s.samples.push({
+        t: g.time,
+        tip: [transform(e, b, [-8.65, -0.23, -4.2]), transform(e, b, [8.65, -0.23, -4.2])],
+        x: e.x,
+        z: e.z,
+        water: e === g.player && e.y < 12 && g.world.height(e.x, e.z) < 0.1,
+      });
+      s.t = g.time;
+      s.x = e.x;
+      s.z = e.z;
+    }
+    while (s.samples.length && g.time - s.samples[0].t > 1.6) s.samples.shift();
+    return s.samples;
+  }
+  function drawTrails(ctx, g, samples, project, aircraft = g.player) {
+    let last = null;
+    for (const sample of samples) {
+      const age = g.time - sample.t;
+      if (last) {
+        const wake = last.water && sample.water;
+        const strength = wake
+          ? 1
+          : 0.3 + 0.6 * Math.min(1, Math.abs(aircraft.bank || 0)) + (aircraft.boost ? 0.35 : 0);
+        for (const [i, side] of [-1, 1].entries()) {
+          const tip = sample.tip[i],
+            prev = last.tip[i];
+          const spread = 1 + age * (wake ? 0.35 : 0.04);
+          const pos = project(
+            sample.x + (tip[0] - sample.x) * spread,
+            wake ? 0.5 : tip[1] + age * 0.55,
+            sample.z + (tip[2] - sample.z) * spread,
+          );
+          const pre = project(
+            last.x + (prev[0] - last.x) * spread,
+            wake ? 0.5 : prev[1] + age * 0.55,
+            last.z + (prev[2] - last.z) * spread,
+          );
+          if (pos && pre) {
+            ctx.globalAlpha = saturate((1 - age / 1.55) * strength) * 0.75;
+            line(ctx, pos.x, pos.y, pre.x, pre.y, wake ? "#c4f2db" : "#ede5ce");
+          }
+          if (wake && pos && age < 0.65) {
+            ctx.globalAlpha = 0.7;
+            ctx.fillStyle = "#effae5";
+            ctx.fillRect(Math.round(pos.x + side * (1 + age * 8)), Math.round(pos.y - age * 2), 2, 1);
+          }
+        }
+      }
+      last = sample;
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // Share the engine outlets with the mesh. Each band sorts in depth with the
+  // nozzle lip, fins and fuselage, including when the jet rolls toward the camera.
+  function exhaustMesh(nozzle, time, boost) {
+    const faces = [];
+    for (const side of [-1, 1]) {
+      const flicker = 1 + 0.1 * Math.sin(time * 31 + side);
+      const length = nozzle.width * (boost ? 9 : 2.4) * flicker;
+      const x = side * nozzle.x;
+      const ring = (distance, radius) => {
+        const z = nozzle.z - 0.04 - distance * length;
+        return [
+          [x, nozzle.y + nozzle.height * radius, z],
+          [x + nozzle.width * radius, nozzle.y, z],
+          [x, nozzle.y - nozzle.height * radius, z],
+          [x - nozzle.width * radius, nozzle.y, z],
+        ];
+      };
+      const mouth = ring(0, 0.85);
+      const bright = ring(0.27, boost ? 0.94 : 0.67);
+      const taper = ring(0.68, 0.54);
+      const tip = [x, nozzle.y, nozzle.z - length];
+      for (let i = 0; i < 4; i++) {
+        const j = (i + 1) % 4;
+        surface(faces, [mouth[i], mouth[j], bright[j], bright[i]], boost ? "#fff8cb" : "#ffd89b", "exhaust");
+        surface(faces, [bright[i], bright[j], taper[j], taper[i]], i % 2 ? "#ffad5e" : "#ffd079", "exhaust");
+        surface(faces, [taper[i], taper[j], tip], i % 2 ? "#f77855" : "#fc925f", "exhaust");
+      }
+    }
+    return faces;
+  }
+  function shadow(ctx, g, b, project) {
+    const e = g.player,
+      h = g.world.height,
+      top = g.world.cloudTop;
+    let cx = e.x,
+      cz = e.z,
+      y = Math.max(0, h(cx, cz)),
+      c = null;
+    // A low sun casts the silhouette away from the horizon; refine once over sloping ground.
+    for (let i = 0; i < 2; i++) {
+      const lift = Math.max(0, e.y - y);
+      cx = e.x - lift * 0.28;
+      cz = e.z - lift * 0.66;
+      c = top ? top(cx, cz, g.time) : null;
+      y = Math.max(0, h(cx, cz), Number.isFinite(c) && c < e.y ? c : -Infinity);
+    }
+    const silhouette = [
+      [0, 11.5],
+      [2.2, 3.5],
+      [8.9, -3.5],
+      [8.45, -5.1],
+      [2.3, -5.6],
+      [5.2, -9.3],
+      [1.9, -8.9],
+      [-1.9, -8.9],
+      [-5.2, -9.3],
+      [-2.3, -5.6],
+      [-8.45, -5.1],
+      [-8.9, -3.5],
+      [-2.2, 3.5],
+    ];
+    const pts = [];
+    for (const [x, z] of silhouette) {
+      const wx = cx + x * b.r[0] + z * b.f[0],
+        wz = cz + x * b.r[2] + z * b.f[2];
+      const sy = c !== null && y === c ? y : Math.max(0, h(wx, wz));
+      const p = project(wx, sy + 0.5, wz);
+      if (!p) return;
+      pts.push([p.x, p.y]);
+    }
+    ctx.globalAlpha = 0.4;
+    polygon(ctx, pts, "#343344");
+    ctx.globalAlpha = 1;
+  }
+  function visible(g, cam, e) {
+    const dx = e.x - cam.x,
+      dy = e.y - cam.y,
+      dz = e.z - cam.z;
+    for (let i = 1; i <= 7; i++) {
+      const t = i / 8;
+      if (g.world.height(cam.x + dx * t, cam.z + dz * t) > cam.y + dy * t + 4) return false;
+    }
+    return true;
+  }
+  function nightLights(ctx, e, b, project, time) {
+    const tip = e.kind === "carrier" ? [53, 0, -26] : e.kind === "bomber" ? [23.6, -.4, -6.8]
+      : e.kind === "dart" ? [6.3, -.1, -7.7] : e.kind === "crescent" ? [9.2, 0, -4.5] : [8.7, -.2, -3.8];
+    for (const sign of [-1,1]) {
+      const pt = project(...transform(e,b,[sign * tip[0], tip[1], tip[2]]));
+      if (!pt) continue;
+      disc(ctx,pt.x,pt.y,clamp(pt.k*.18,0,1.6),sign<0 ? "#ff8275" : "#91f6d2");
+    }
+    if (Math.sin(time*4+(e.id || 0))>.95) {
+      const pt = project(...transform(e,b,[0,1.2,-5]));
+      if (pt) disc(ctx,pt.x,pt.y,1,"#fff1d7");
+    }
+  }
+  function prismCharge(ctx,e,project) {
+    if (!e.charge) return;
+    const p = project(e.x,e.y+12,e.z);
+    if (!p) return;
+    const r = clamp(3 + 9*(1-e.charge) + p.k*3,3,18);
+    const x=p.x,y=p.y,tone=e.charge>.7?"#fff6ff":"#f8a6fa";
+    line(ctx,x-r,y,x,y-r,tone);line(ctx,x,y-r,x+r,y,tone);
+    line(ctx,x+r,y,x,y+r,tone);line(ctx,x,y+r,x-r,y,tone);
+    disc(ctx,x,y,1+e.charge*2,tone);
+  }
+  function compactEnemy(ctx, p, e, atNight) {
+    const x = Math.round(p.x),
+      y = Math.round(p.y),
+      ground = e.ground;
+    if (ground) {
+      ctx.fillStyle = dark;
+      ctx.fillRect(x - 2, y - 1, 5, 3);
+      ctx.fillStyle = e.kind === "prism" ? "#efb0ff" : "#f7b66f";
+      ctx.fillRect(x, y - 3, e.kind === "prism" ? 2 : 1, 2);
+    } else if (e.kind === "bomber") {
+      line(ctx,x-5,y,x+5,y,atNight?"#a5a9bb":"#665060");
+      ctx.fillStyle="#dfa360";ctx.fillRect(x-1,y-1,3,3);
+    } else if (e.kind === "dart") {
+      polygon(ctx,[[x,y-3],[x+2,y+2],[x,y+1],[x-2,y+2]],"#70cdbc");
+    } else {
+      const size = clamp(Math.round(p.k * (e.kind === "carrier" ? 46 : 8)), 2, 8);
+      line(ctx, x - size, y + 1, x, y - 1, "#514458");
+      line(ctx, x, y - 1, x + size, y + 1, "#514458");
+      ctx.fillStyle = e.kind === "crescent" ? "#f5b2ab" : "#e5c6aa";
+      ctx.fillRect(x, y - 1, 2, 1);
+    }
+  }
+  function paintShot(ctx, project, s, time) {
+    const p = project(s.x, s.y, s.z);
+    if (!p) return;
+    const kind = s.kind,
+      missile = kind === "missile",
+      enemy = kind === "enemy",
+      wisp = kind === "wisp";
+    const v = Math.hypot(s.vx, s.vy, s.vz) || 1;
+    const len = clamp(v * 0.032, 3, 26),
+      end = project(s.x - (s.vx / v) * len, s.y - (s.vy / v) * len, s.z - (s.vz / v) * len);
+    if (!end) return;
+    if (s.style === "ember" || s.style === "pulse") {
+      const ember = s.style === "ember";
+      const outer = ember ? "#ff9857" : "#ed87ff";
+      const r = clamp(p.k*2.4,.8,6);
+      line(ctx,end.x,end.y,p.x,p.y,outer);
+      disc(ctx,p.x,p.y,r,outer);
+      disc(ctx,p.x,p.y,r*.4,ember?"#fff8bc":"#fff0ff");
+      return;
+    }
+    if (missile) {
+      const tail = project(s.x - (s.vx / v) * 2, s.y - (s.vy / v) * 2, s.z - (s.vz / v) * 2);
+      if (tail) {
+        line(ctx, tail.x, tail.y, end.x, end.y, "#ff9063", Math.max(1, Math.round(p.k * 0.8)));
+        line(ctx, p.x, p.y, tail.x, tail.y, "#dae4dc", Math.max(1, Math.round(p.k * 0.5)));
+      }
+    } else {
+      const col = enemy ? "#ff665b" : wisp ? "#72e6d6" : "#ffd26f";
+      const width = clamp(Math.round(p.k * 0.4), 1, 3);
+      line(ctx, end.x, end.y, p.x, p.y, col, width);
+      line(
+        ctx,
+        end.x * 0.38 + p.x * 0.62,
+        end.y * 0.38 + p.y * 0.62,
+        p.x,
+        p.y,
+        enemy ? "#ffd1a2" : wisp ? "#d5fff0" : "#fff7c9",
+        width,
+      );
+    }
+  }
+  const puffCache = new Map();
+  function smokePuff(stage) {
+    if (puffCache.has(stage)) return puffCache.get(stage);
+    const img = document.createElement("canvas");
+    img.width = 22;
+    img.height = 20;
+    const p = img.getContext("2d"),
+      dither = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+    const lobes = [
+      [7, 8, 6],
+      [13, 6, 5],
+      [15, 11, 6],
+      [9, 13, 4],
+      [4, 11, 3],
+    ];
+    const colors = ["#514658", "#766274", "#96808a", "#af9799", "#c8aaa4"];
+    for (let y = 0; y < img.height; y++)
+      for (let x = 0; x < img.width; x++) {
+        let deep = -1;
+        for (const [cx, cy, r] of lobes) deep = Math.max(deep, 1 - Math.hypot(x - cx, (y - cy) * 1.12) / r);
+        const grain = dither[(x % 4) + (y % 4) * 4];
+        if (deep < 0 || grain < stage * 0.9 + (1 - deep) * 2.5) continue;
+        const tone = clamp(
+          Math.floor((1 - y / 19) * 2.8 + deep * 0.65 + (grain > 11 ? 0.4 : 0) + stage * 0.22),
+          0,
+          4,
+        );
+        p.fillStyle = colors[tone];
+        p.fillRect(x, y, 1, 1);
+      }
+    puffCache.set(stage, img);
+    return img;
+  }
+  function paintFx(ctx, p, fx, project) {
+    const t = 1 - saturate(fx.life / (fx.maxLife || 1)),
+      r = clamp((fx.size || 1) * p.k, 0.5, 65);
+    const kind = fx.kind;
+    if (kind === "ring" || kind === "scorch" || kind === "foam") {
+      const radius = (fx.size || 1) * (kind === "scorch" ? 1 : 0.08 + 0.92 * t);
+      const points = [];
+      for (let j = 0; j < 20; j++) {
+        const a = (j * TAU) / 20,
+          pt = project(fx.x + Math.cos(a) * radius, fx.y + 0.2, fx.z + Math.sin(a) * radius);
+        if (pt) points.push([pt.x, pt.y]);
+      }
+      if (points.length < 3) return;
+      ctx.globalAlpha = kind === "scorch" ? 0.48 * (1 - t) : 0.75 * (1 - t);
+      if (kind === "scorch") {
+        polygon(ctx, points, "#4f3944");
+        for (let j = 0; j < 6; j++) {
+          const a = j * 2.4,
+            spread = radius * (0.25 + j * 0.09);
+          const pt = project(fx.x + Math.cos(a) * spread, fx.y + 0.85, fx.z + Math.sin(a) * spread);
+          if (pt && Math.sin(fx.life * 4.6 + j * 1.43) > -0.3) {
+            ctx.globalAlpha = 0.85 * (1 - t);
+            ctx.fillStyle = j % 2 ? "#f29c56" : "#df6650";
+            ctx.fillRect(Math.round(pt.x), Math.round(pt.y), Math.max(1, Math.round(pt.k * 0.65)), 1);
+          }
+        }
+      } else
+        for (let j = 0; j < points.length; j++) {
+          const a = points[j],
+            b = points[(j + 1) % points.length];
+          line(ctx, a[0], a[1], b[0], b[1], kind === "ring" ? "#ffdcaa" : "#c0f0da");
+        }
+    } else if (kind === "smoke") {
+      ctx.globalAlpha = clamp(0.82 * (1 - t), 0.03, 0.82);
+      const puff = smokePuff(Math.floor(t * 5)),
+        diam = Math.max(2, Math.round(r * 2.0));
+      ctx.drawImage(puff, Math.round(p.x - diam * 0.5), Math.round(p.y - diam * 0.5), diam, diam);
+    } else if (kind === "fire") {
+      const colors = ["#fff6bb", "#ffd16a", "#ff9654", "#e65c4c", "#a94d56"];
+      disc(ctx, p.x, p.y, r, colors[clamp(Math.floor(t * 5), 0, 4)]);
+      if (r > 2 && t < 0.55) disc(ctx, p.x - 0.18 * r, p.y - 0.2 * r, r * 0.54, "#ffec9a");
+    } else if (kind === "spray") {
+      ctx.globalAlpha = 1 - t * 0.75;
+      const tail = project(fx.x - (fx.vx || 0) * 0.05, fx.y - (fx.vy || 0) * 0.05, fx.z - (fx.vz || 0) * 0.05);
+      if (tail) line(ctx, tail.x, tail.y, p.x, p.y, "#96d2cb", clamp(Math.round(r * 0.58), 1, 3));
+      const drop = clamp(Math.round(r * 0.48), 1, 4);
+      ctx.fillStyle = "#e2f7e9";
+      ctx.fillRect(Math.round(p.x), Math.round(p.y), drop, drop);
+    } else if (kind === "vapor") {
+      ctx.globalAlpha = 1 - t;
+      disc(ctx, p.x, p.y, r, "#f3e6dc");
+    } else {
+      ctx.globalAlpha = saturate((1 - t) * 1.65);
+      const tail = project(fx.x - (fx.vx || 0) * 0.025, fx.y - (fx.vy || 0) * 0.025, fx.z - (fx.vz || 0) * 0.025);
+      if (tail) line(ctx, p.x, p.y, tail.x, tail.y, t > 0.45 ? "#fc9c58" : "#ffed9d");
+    }
+    ctx.globalAlpha = 1;
+  }
+  function corners(ctx, x, y, r, color) {
+    const arm = clamp(Math.round(r * 0.35), 2, 7);
+    for (const i of [-1, 1])
+      for (const j of [-1, 1]) {
+        const px = x + i * r,
+          py = y + j * r;
+        line(ctx, px, py, px - i * arm, py, color);
+        line(ctx, px, py, px, py - j * arm, color);
+      }
+  }
+  function cues(ctx, g, cam, project, b) {
+    const w = ctx.canvas.width,
+      h = ctx.canvas.height,
+      e = g.player;
+    const aimDistance = g.view === 2 ? 65 : 450;
+    const aim = project(e.x + b.f[0] * aimDistance, e.y + b.f[1] * aimDistance, e.z + b.f[2] * aimDistance);
+    if (aim && aim.x > 8 && aim.x < w - 8 && aim.y > 8 && aim.y < h - 8) {
+      const x = Math.round(aim.x),
+        y = Math.round(aim.y);
+      ctx.globalAlpha = 0.92;
+      for (const [dx, dy] of [
+        [-1, 0],
+        [1, 0],
+        [0, -1],
+        [0, 1],
+      ]) {
+        line(ctx, x + dx * 5, y + dy * 5 + 1, x + dx * 9, y + dy * 9 + 1, "#424c4a");
+        line(ctx, x + dx * 5, y + dy * 5, x + dx * 9, y + dy * 9, ice);
+      }
+      ctx.fillStyle = ice;
+      ctx.fillRect(x, y, 1, 1);
+      ctx.globalAlpha = 1;
+    }
+    const target = g.target || g.lockTarget;
+    if (target) {
+      const p = project(target.x, target.y, target.z);
+      const inView = p && p.x > 16 && p.x < w - 16 && p.y > 22 && p.y < h * (g.cockpitBlend > 0.5 ? 0.65 : 0.86);
+      if (inView) {
+        const r = clamp(p.k * (target.kind === "carrier" ? 57 : 12) + 4, 6, 38);
+        ctx.globalAlpha = 0.73;
+        corners(ctx, p.x, p.y, r, amber);
+        ctx.globalAlpha = 1;
+        if (target.kind === "carrier" && target.maxHp) {
+          const x = Math.round(p.x - 18),
+            y = Math.round(p.y + r + 5);
+          ctx.fillStyle = dark;
+          ctx.fillRect(x - 1, y - 1, 38, 4);
+          ctx.fillStyle = amber;
+          ctx.fillRect(x, y, Math.ceil(36 * saturate(target.hp / target.maxHp)), 2);
+        }
+      } else {
+        const v = [target.x - cam.x, target.y - cam.y, target.z - cam.z];
+        const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+        let dx = dot(v, cam.right),
+          dy = -dot(v, cam.up);
+        if (Math.abs(dx) + Math.abs(dy) < 0.01) dy = 1;
+        if (dot(v, cam.forward) < 0 && Math.abs(dy) < Math.abs(dx) * 0.18) dy = 0.2 * Math.abs(dx);
+        const n = Math.hypot(dx, dy);
+        dx /= n;
+        dy /= n;
+        const edgeY = dy > 0 ? (g.cockpitBlend > 0.5 ? 0.18 : 0.35) * h : 0.34 * h;
+        const t = Math.min((w / 2 - 17) / (Math.abs(dx) || 0.0001), edgeY / (Math.abs(dy) || 0.0001));
+        const x = w / 2 + dx * t,
+          y = h / 2 + dy * t,
+          sx = -dy,
+          sy = dx;
+        polygon(
+          ctx,
+          [
+            [x + dx * 4, y + dy * 4],
+            [x - dx * 5 + sx * 4, y - dy * 5 + sy * 4],
+            [x - dx * 3, y - dy * 3],
+            [x - dx * 5 - sx * 4, y - dy * 5 - sy * 4],
+          ],
+          amber,
+        );
+      }
+    }
+    if (g.lockTarget && g.lockProgress > 0) {
+      const t = g.lockTarget,
+        p = project(t.x, t.y, t.z);
+      if (!p) return;
+      const r = clamp(p.k * (t.kind === "carrier" ? 56 : 10) + 4, 5, 40) + (1 - g.lockProgress) * 7;
+      const col = g.lockProgress >= 0.99 ? "#91ffd5" : "#ffe393";
+      corners(ctx, p.x, p.y, r, col);
+      if (g.lockProgress >= 0.99) {
+        const name = contactNames[t.kind];
+        label(ctx,name ? "LOCK " + name : "LOCK",p.x,p.y-r-8,col,"center");
+      }
+    }
+  }
+
+  function flightHud(ctx, g, cam, project) {
+    const w = ctx.canvas.width,
+      h = ctx.canvas.height,
+      e = g.player,
+      cx = w / 2,
+      cy = h / 2;
+    const yaw = Math.atan2(cam.forward[0], cam.forward[2]),
+      col = "#a2f8d6";
+    const dir = (a, p) =>
+      project(
+        cam.x + 2000 * Math.sin(a) * Math.cos(p),
+        cam.y + 2000 * Math.sin(p),
+        cam.z + 2000 * Math.cos(a) * Math.cos(p),
+      );
+    const heading = ((yaw * 180) / Math.PI + 360) % 360,
+      top = h * 0.2;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(cx - w * 0.22, h * 0.27, w * 0.44, h * 0.4);
+    ctx.clip();
+    ctx.globalAlpha = 0.85;
+    for (let a = -60; a <= 60; a += 10) {
+      const p = dir(yaw, (a * Math.PI) / 180);
+      if (!p) continue;
+      let dx = cam.up[1],
+        dy = cam.right[1];
+      const len = Math.hypot(dx, dy) || 1;
+      dx /= len;
+      dy /= len;
+      const arm = a === 0 ? 32 : 19;
+      for (const side of [-1, 1]) {
+        const l = (a === 0 ? 10 : 8) * side,
+          r = arm * side;
+        line(ctx, p.x + dx * l, p.y + dy * l, p.x + dx * r, p.y + dy * r, col);
+        if (a !== 0) {
+          const s = a > 0 ? 1 : -1;
+          line(ctx, p.x + dx * r, p.y + dy * r, p.x + dx * r - dy * 3 * s, p.y + dy * r + dx * 3 * s, col);
+        }
+      }
+      if (a !== 0 && w > 280) label(ctx, Math.abs(a), p.x + dx * (arm + 4), p.y + dy * (arm + 4) - 2, col);
+    }
+    ctx.restore();
+    const range = Math.min(67, w * 0.18);
+    for (let a = Math.floor(heading / 5) * 5 - 20; a <= heading + 20; a += 5) {
+      const x = cx + (a - heading) * 2.65;
+      if (Math.abs(x - cx) > range) continue;
+      line(ctx, x, top, x, top + (a % 10 === 0 ? 4 : 2), col);
+      if (a % 10 === 0) label(ctx, String((a + 360) % 360).padStart(3, "0"), x, top - 7, col, "center");
+    }
+    polygon(
+      ctx,
+      [
+        [cx, top + 5],
+        [cx - 2, top + 9],
+        [cx + 2, top + 9],
+      ],
+      amber,
+    );
+    const atX = clamp(w * 0.19, 49, 98),
+      fy = cy + 7;
+    function tape(x, str, sub) {
+      const width = 4 * str.length + 6;
+      ctx.fillStyle = "rgba(29,48,52,.60)";
+      ctx.fillRect(Math.round(x - width / 2), Math.round(fy) - 3, width, 10);
+      line(ctx, x - width / 2, fy - 3, x - width / 2, fy + 6, col);
+      line(ctx, x + width / 2, fy - 3, x + width / 2, fy + 6, col);
+      label(ctx, str, x, fy - 1, col, "center");
+      label(ctx, sub, x, fy + 10, col, "center");
+    }
+    tape(cx - atX, String(Math.round(e.speed * 1.94384)), "KTS");
+    tape(cx + atX, String(Math.round(e.y * 3.28084)), "FT");
+    const agl = Math.max(0, e.y - Math.max(0, g.world.height(e.x, e.z)));
+    label(ctx, (e.gForce || 1).toFixed(1) + " G", cx - atX, fy + 22, col, "center");
+    label(ctx, "R " + Math.round(agl * 3.28084), cx + atX, fy + 22, col, "center");
+    label(ctx, "MSL " + e.missiles, cx, cy + h * 0.12, col, "center");
+    const warning = agl < 17 ? "PULL UP" : e.hull < 40 ? "HULL" : e.shield < 20 ? "SHIELD" : "";
+    if (warning && Math.sin(g.time * 9) > -0.25) label(ctx, warning, cx, cy - h * 0.1, "#ffc178", "center");
+  }
+
+  let panelCanvas,
+    radarCanvas,
+    radarStamp = -2,
+    radarOwner = null;
+  function panel(ctx, g, thumbSpace) {
+    const e = g.player,
+      w = ctx.canvas.width,
+      h = ctx.canvas.height;
+    if (!panelCanvas) {
+      panelCanvas = document.createElement("canvas");
+      panelCanvas.width = 420;
+      panelCanvas.height = 88;
+    }
+    const c = panelCanvas.getContext("2d");
+    c.clearRect(0, 0, 420, 88);
+    const palette = {
+      bezel: "#272d3c",
+      edge: "#859193",
+      lit: "#b6c1ad",
+      dial: "#232f39",
+      tick: "#c6d0ba",
+      lamp: "#ffa56c",
+    };
+    const cream = palette.tick;
+    function panelShape(points, col) {
+      polygon(c, points, col);
+    }
+    function bolt(x, y) {
+      c.fillStyle = "#959b91";
+      c.fillRect(x, y, 2, 2);
+      c.fillStyle = "#454a54";
+      c.fillRect(x, y + 1, 2, 1);
+    }
+    function gauge(x, y, r, name) {
+      disc(c, x, y, r + 2, "#1d2332");
+      disc(c, x, y, r + 1, "#87918a");
+      disc(c, x, y, r, "#48505a");
+      disc(c, x, y, r - 2, palette.dial);
+      label(c, name, x, y + r + 4, cream, "center");
+    }
+    function ticks(x, y, r) {
+      for (let j = 0; j <= 10; j++) {
+        const a = -2.45 + (j * 4.9) / 10,
+          s = Math.sin(a),
+          co = -Math.cos(a),
+          inside = r - (j % 2 ? 2 : 4);
+        line(c, x + s * inside, y + co * inside, x + s * (r - 1), y + co * (r - 1), j > 8 ? "#f2a16e" : cream);
+      }
+    }
+    function needle(x, y, r, val, color = amber) {
+      const a = -2.45 + saturate(val) * 4.9;
+      line(c, x - Math.sin(a) * 2, y + Math.cos(a) * 2, x + Math.sin(a) * r, y - Math.cos(a) * r, color);
+      disc(c, x, y, 1, "#e9e3c5");
+    }
+    // The upper lip and casting are hand stepped, mirroring the pixel silhouette of the jet.
+    panelShape(
+      [
+        [0, 31],
+        [35, 23],
+        [62, 21],
+        [78, 11],
+        [139, 11],
+        [145, 7],
+        [273, 7],
+        [279, 11],
+        [342, 11],
+        [358, 21],
+        [388, 22],
+        [420, 31],
+        [420, 88],
+        [0, 88],
+      ],
+      "#1d2332",
+    );
+    panelShape(
+      [
+        [0, 35],
+        [35, 27],
+        [64, 25],
+        [79, 15],
+        [140, 15],
+        [146, 11],
+        [271, 11],
+        [277, 15],
+        [341, 15],
+        [356, 25],
+        [390, 26],
+        [420, 35],
+        [420, 88],
+        [0, 88],
+      ],
+      "#89968e",
+    );
+    panelShape(
+      [
+        [0, 38],
+        [38, 30],
+        [66, 27],
+        [81, 18],
+        [142, 18],
+        [148, 14],
+        [271, 14],
+        [277, 18],
+        [340, 18],
+        [355, 28],
+        [391, 29],
+        [420, 38],
+        [420, 88],
+        [0, 88],
+      ],
+      "#515966",
+    );
+    panelShape(
+      [
+        [0, 62],
+        [35, 62],
+        [42, 45],
+        [60, 36],
+        [60, 87],
+        [0, 87],
+      ],
+      "#363c4c",
+    );
+    panelShape(
+      [
+        [360, 36],
+        [381, 46],
+        [391, 62],
+        [420, 62],
+        [420, 87],
+        [360, 87],
+      ],
+      "#363c4c",
+    );
+    for (const x of [37, 61, 133, 151, 270, 286, 358, 383]) {
+      bolt(x, 32);
+      bolt(x, 77);
+    }
+    // Throttle gate, lever, and position detents.
+    label(c, "THR", 29, 39, cream, "center");
+    c.fillStyle = dark;
+    c.fillRect(25, 48, 6, 27);
+    for (let j = 0; j < 5; j++) line(c, 18, 50 + j * 5, 21, 50 + j * 5, cream);
+    const leverY = e.boost ? 49 : 61;
+    line(c, 28, 72, 28, leverY, "#a2aaa0", 2);
+    c.fillStyle = "#232834";
+    c.fillRect(21, leverY - 2, 15, 6);
+    c.fillStyle = amber;
+    c.fillRect(22, leverY - 2, 13, 2);
+    gauge(84, 46, 17, "AIRSPEED");
+    ticks(84, 46, 14);
+    needle(84, 46, 11, (e.speed * 1.94384) / 420);
+    label(c, Math.round(e.speed * 1.94384), 84, 54, cream, "center");
+    gauge(123, 46, 17, "ATT");
+    const pitch = e.pitch,
+      bank = e.bank + e.roll,
+      sb = Math.sin(bank),
+      cb = Math.cos(bank);
+    for (let j = -13; j <= 13; j++) {
+      const a = Math.floor(Math.sqrt(13 * 13 - j * j));
+      for (let i = -a; i <= a; i++) {
+        const elevation = i * sb + j * cb - pitch * 24;
+        c.fillStyle = elevation < -0.65 ? "#638b9d" : elevation > 0.65 ? "#ad735e" : "#f1dfad";
+        c.fillRect(123 + i, 46 + j, 1, 1);
+      }
+    }
+    line(c, 115, 46, 121, 46, amber);
+    line(c, 125, 46, 131, 46, amber);
+    disc(c, 123, 46, 1, amber);
+    gauge(164, 46, 17, "ALT FT");
+    ticks(164, 46, 14);
+    needle(164, 46, 11, ((e.y * 3.28084) % 1000) / 1000);
+    c.fillStyle = "#162532";
+    c.fillRect(153, 51, 23, 8);
+    label(c, String(Math.round(e.y * 3.28084)).padStart(4, "0"), 164, 53, cream, "center");
+    // Moving map, sweep arm and actual contacts share a ~2.2 km radar range.
+    gauge(211, 45, 23, "GROUND RADAR");
+    const rr = 19;
+    if (!radarCanvas) {
+      radarCanvas = document.createElement("canvas");
+      radarCanvas.width = radarCanvas.height = 39;
+    }
+    if (g.time - radarStamp > 0.32 || radarStamp > g.time || radarOwner !== g) {
+      const rc = radarCanvas.getContext("2d");
+      rc.clearRect(0, 0, 39, 39);
+      const sy = Math.sin(e.yaw),
+        cy = Math.cos(e.yaw);
+      for (let py = -rr; py <= rr; py += 2)
+        for (let px = -rr; px <= rr; px += 2) {
+          if (px * px + py * py > rr * rr) continue;
+          const ex = e.x + (px * cy - py * sy) * 59,
+            ez = e.z + (-px * sy - py * cy) * 59;
+          const terrain = g.world.height(ex, ez);
+          rc.fillStyle =
+            terrain <= 0 ? "#312e32" : terrain < 25 ? "#5c4636" : terrain < 75 ? "#82613d" : "#a47c47";
+          rc.fillRect(px + rr, py + rr, 2, 2);
+        }
+      radarOwner = g;
+      radarStamp = g.time;
+    }
+    c.drawImage(radarCanvas, 211 - rr, 45 - rr);
+    const angle = g.time * 1.85;
+    line(c, 211, 45, 211 + Math.sin(angle) * rr, 45 - Math.cos(angle) * rr, "#f9bb6e");
+    for (const t of g.enemies) {
+      const dx = t.x - e.x,
+        dz = t.z - e.z,
+        rx = (dx * Math.cos(e.yaw) - dz * Math.sin(e.yaw)) / 59,
+        ry = -(dx * Math.sin(e.yaw) + dz * Math.cos(e.yaw)) / 59;
+      if (Math.hypot(rx, ry) < rr) {
+        c.fillStyle = "#ffdc8b";
+        c.fillRect(Math.round(211 + rx), Math.round(45 + ry), 2, 2);
+      }
+    }
+    c.fillStyle = "#faf2b0";
+    c.fillRect(210, 45, 3, 1);
+    c.fillRect(211, 44, 1, 2);
+    gauge(257, 46, 17, "VSI");
+    ticks(257, 46, 14);
+    needle(257, 46, 11, 0.5 + (e.vy || 0) / 125);
+    label(c, Math.round(((e.vy || 0) * 196.85) / 100), 257, 54, cream, "center");
+    // Turn-and-slip indicator and paired engine power tapes.
+    gauge(297, 46, 16, "TURN");
+    const tilt = clamp(e.bank || 0, -1, 1);
+    line(c, 288, 45 - tilt * 6, 306, 45 + tilt * 6, amber);
+    line(c, 297, 43, 297, 48, cream);
+    line(c, 287, 52, 307, 52, "#849497");
+    disc(c, 297 + tilt * 7, 52, 2, "#222b37");
+    label(c, "ENGINE", 336, 30, cream, "center");
+    for (let k = 0; k < 2; k++) {
+      const x = 327 + k * 11;
+      c.fillStyle = "#26313b";
+      c.fillRect(x, 39, 7, 22);
+      const pct = clamp(0.33 + e.speed / 270 + (e.boost ? 0.21 : 0), 0, 1);
+      for (let j = 0; j < 8; j++) {
+        c.fillStyle = j / 8 > pct ? "#3b454e" : j > 5 ? "#ffc276" : "#9db497";
+        c.fillRect(x + 1, 58 - j * 2.5, 5, 1.6);
+      }
+      label(c, String(k + 1), x + 3, 64, cream, "center");
+    }
+    const now = new Date(),
+      clock = [now.getHours(), now.getMinutes()].map((v) => String(v).padStart(2, "0")).join(":");
+    c.fillStyle = palette.dial;
+    c.fillRect(365, 42, 28, 11);
+    label(c, clock, 379, 45, amber, "center");
+    const lamps = [
+      ["SHD", e.shield < 20],
+      ["HUL", e.hull < 40],
+      ["AB", e.boost],
+    ];
+    lamps.forEach(([text, on], j) => {
+      c.fillStyle = on ? "#b85d47" : "#3e444c";
+      c.fillRect(362 + j * 13, 58, 12, 10);
+      label(c, text, 368 + j * 13, 61, on ? "#fff2b8" : "#9b9f96", "center");
+    });
+    // Small windshield braces remain peripheral so the open sky dominates the view.
+    const leftEdge = thumbSpace ? w * thumbSpace[0] : 0;
+    const rightEdge = thumbSpace ? w * thumbSpace[1] : w;
+    const displayWidth = rightEdge - leftEdge;
+    // In short landscape the flight instruments occupy the gap between the two thumbs.
+    // Crop the console to airspeed, attitude, altitude, radar and vertical speed on narrow phones.
+    const compact = thumbSpace && displayWidth < 315;
+    const sourceX = compact ? 60 : 0;
+    const sourceWidth = compact ? 220 : 420;
+    const scale = Math.min(thumbSpace ? displayWidth / sourceWidth : w / 357, Math.max(.62, h / 330) * 1.22);
+    const pw = sourceWidth * scale, ph = 88 * scale;
+    const center = (leftEdge + rightEdge) / 2;
+    const x = center - pw / 2, y = h - ph - 5;
+    polygon(
+      ctx,
+      [
+        [0, h * 0.25],
+        [5, h * 0.28],
+        [w * 0.11, h * 0.76],
+        [w * 0.19, h * 0.87],
+        [w * 0.12, h * 0.88],
+        [w * 0.075, h * 0.78],
+        [0, h * 0.46],
+      ],
+      "#414757",
+    );
+    polygon(
+      ctx,
+      [
+        [w, h * 0.25],
+        [w - 5, h * 0.28],
+        [w * 0.89, h * 0.76],
+        [w * 0.81, h * 0.87],
+        [w * 0.88, h * 0.88],
+        [w * 0.925, h * 0.78],
+        [w, h * 0.46],
+      ],
+      "#414757",
+    );
+    line(ctx, 0, h * 0.26, w * 0.103, h * 0.76, "#a5a799", 2);
+    line(ctx, w, h * 0.26, w * 0.897, h * 0.76, "#a5a799", 2);
+    polygon(
+      ctx,
+      [
+        [0, y + 28 * scale],
+        [x + 50 * scale, y + 29 * scale],
+        [x + 70 * scale, h],
+        [0, h],
+      ],
+      "#353a49",
+    );
+    polygon(
+      ctx,
+      [
+        [w, y + 28 * scale],
+        [x + 370 * scale, y + 29 * scale],
+        [x + 350 * scale, h],
+        [w, h],
+      ],
+      "#353a49",
+    );
+    ctx.fillStyle = "#353a49";
+    ctx.fillRect(Math.floor(x), Math.floor(y + ph - 1), Math.ceil(pw), Math.max(0, Math.ceil(h - y - ph + 1)));
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(panelCanvas, sourceX, 0, sourceWidth, 88, Math.round(x), Math.round(y), Math.ceil(pw), Math.ceil(ph));
+
+    // Paint this readout at the canvas pixel pitch so the numbers survive
+    // narrow screens and adaptive resolution. It sits on the glare shield.
+    const readoutWidth = 116;
+    const left = Math.round(center - readoutWidth / 2), top = Math.round(y + 14 * scale - 14);
+    ctx.fillStyle = "#87918a";
+    ctx.fillRect(left - 1, top - 1, readoutWidth + 2, 17);
+    ctx.fillStyle = "#202d37";
+    ctx.fillRect(left, top, readoutWidth, 15);
+    const readouts = [["SHIELD", e.shield, "#8dd7da"], ["HULL", e.hull, "#f7b181"]];
+    readouts.forEach(([name, value, color], i) => {
+      const x = left + 4 + i * 57;
+      label(ctx, name, x, top + 2, cream);
+      label(ctx, Math.round(value), x + 49, top + 2, color, "right");
+      ctx.fillStyle = "#48535b";
+      ctx.fillRect(x, top + 9, 49, 3);
+      ctx.fillStyle = color;
+      ctx.fillRect(x, top + 9, Math.round(49 * saturate(value / 100)), 3);
+    });
+  }
+
+  const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
+  function boostVibration(ctx, g) {
+    if (!g.player.boost || g.view === 2 || reducedMotion.matches) return;
+    // One internal pixel of airframe movement. The world, sights and flight physics stay steady.
+    const t = g.time;
+    const x = Math.round(0.57 * Math.sin(t * 48) + 0.2 * Math.sin(t * 31));
+    const y = Math.round(0.83 * Math.sin(t * 56));
+    ctx.translate(x, y);
+  }
+
+  function draw(ctx, g, cam, project) {
+    const w = ctx.canvas.width,
+      h = ctx.canvas.height,
+      p = g.player,
+      b = basis(p);
+    ctx.save();
+    ctx.clearRect(0, 0, w, h);
+    ctx.imageSmoothingEnabled = false;
+    const trail = trailState(g, b),
+      blend = g.cockpitBlend || 0;
+    const inScreen = (a, margin) => a && a.x > -margin && a.x < w + margin && a.y > -margin && a.y < h + margin;
+    shadow(ctx, g, b, project);
+    drawTrails(ctx, g, trail, project);
+    const objects = [];
+    for (const e of g.enemies) {
+      const a = project(e.x, e.y, e.z);
+      if (inScreen(a, 80) && visible(g, cam, e)) objects.push({ type: "enemy", e, a, d: a.d });
+    }
+    for (const s of g.shots) {
+      const a = project(s.x, s.y, s.z);
+      if (inScreen(a, 36)) objects.push({ type: "shot", e: s, a, d: a.d });
+    }
+    for (const fx of g.particles) {
+      const a = project(fx.x, fx.y, fx.z);
+      if (inScreen(a, 42)) objects.push({ type: "fx", e: fx, a, d: a.d });
+    }
+    for (const e of g.wisps || []) {
+      const a = project(e.x, e.y, e.z);
+      if (inScreen(a, 14)) objects.push({ type: "wisp", e, a, d: a.d });
+    }
+    const pp = project(p.x, p.y, p.z);
+    if (pp && blend < 0.52) objects.push({ type: "player", e: p, a: pp, d: pp.d });
+    objects.sort((a, b) => b.d - a.d);
+    for (const { type, e, a } of objects) {
+      if (type === "fx") {
+        paintFx(ctx, a, e, project);
+        continue;
+      }
+      if (type === "shot") {
+        paintShot(ctx, project, e, g.time);
+        continue;
+      }
+      if (type === "wisp") {
+        const r = clamp(a.k * 1.15, 1, 6);
+        const x = a.x,
+          y = a.y;
+        polygon(
+          ctx,
+          [
+            [x - r * 2, y],
+            [x, y - r],
+            [x + r * 2, y],
+            [x, y + r],
+          ],
+          "#a87448",
+        );
+        disc(ctx, x, y, r * 0.65, "#ffe69a");
+        continue;
+      }
+      if (type === "player") {
+        ctx.save();
+        boostVibration(ctx, g);
+        ctx.globalAlpha = 1 - saturate((blend - 0.12) / 0.4);
+        drawMesh(ctx, e, jetMesh.concat(exhaustMesh(jetNozzle, g.time, e.boost)), b, project, e.missiles, g.world.night);
+        if (g.world.night) nightLights(ctx,e,b,project,g.time);
+        ctx.restore();
+        continue;
+      }
+      const carrier = e.kind === "carrier";
+      if (e.kind === "jet" || e.kind === "interceptor") {
+        drawTrails(ctx, g, trailState(g, basis(e), e), project, e);
+      }
+      if (a.k * (carrier ? 50 : e.kind === "bomber" ? 23 : 8) < 4) {
+        compactEnemy(ctx, a, e, g.world.night);
+        if (e.kind === "prism") prismCharge(ctx,e,project);
+        continue;
+      }
+      const ground = e.ground,
+        base = ground ? { ...e, y: Math.max(0, g.world.height(e.x, e.z)) } : e;
+      const eb = basis(e);
+      let mesh = meshes[e.kind] || rivalMesh;
+      if (carrier || e.kind === "jet" || e.kind === "interceptor")
+        mesh = mesh.concat(exhaustMesh(carrier ? carrierNozzle : jetNozzle, g.time, false));
+      drawMesh(ctx, base, mesh, eb, project, 0, g.world.night);
+      if (e.kind === "prism") prismCharge(ctx,e,project);
+      if (g.world.night && !ground) nightLights(ctx,e,eb,project,g.time);
+    }
+    if (g.state !== "title") {
+      if (blend > 0.04) {
+        ctx.globalAlpha = blend;
+        flightHud(ctx, g, cam, project);
+        ctx.globalAlpha = blend;
+        ctx.save();
+        boostVibration(ctx, g);
+        panel(ctx, g, cam.cockpitSpace);
+        ctx.restore();
+        ctx.globalAlpha = 1;
+      }
+      cues(ctx, g, cam, project, b);
+      if (p.hitFlash > 0.04) {
+        const shield = p.shield > 0,
+          col = shield ? "#82def3" : "#ff845e";
+        ctx.globalAlpha = p.hitFlash * 0.74;
+        ctx.fillStyle = col;
+        for (const x of [0, w - 2])
+          for (let j = 0; j < 7; j++) ctx.fillRect(x, Math.round(h * (0.25 + j * 0.08)), 2, Math.ceil(h * 0.044));
+        ctx.globalAlpha = 1;
+      }
+    }
+    ctx.restore();
+  }
+  window.PatrolArt = { draw };
+})();
