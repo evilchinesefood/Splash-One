@@ -1189,7 +1189,8 @@
     const n = Math.hypot(dx, dy);
     dx /= n;
     dy /= n;
-    const edgeY = dy > 0 ? (cockpit ? 0.12 : 0.35) * h : 0.34 * h;
+    const top = cockpit ? Math.min(.16 * h, (w < h ? .32 : .20) * h - 19) : .16 * h;
+    const edgeY = dy > 0 ? (cockpit ? .12 : .35) * h : h / 2 - top;
     const t = Math.min((w / 2 - 17 - inset) / (Math.abs(dx) || 0.0001),
       (edgeY - inset) / (Math.abs(dy) || 0.0001));
     return { x: w / 2 + dx * t, y: h / 2 + dy * t, dx, dy, behind };
@@ -1278,7 +1279,7 @@
         const range = meters < 1000 ? Math.round(meters / 10) * 10 + "M" : (meters / 1000).toFixed(1) + "KM";
         const text = (behind ? "TURN " : "") + range;
         const margin = typeWidth(text) / 2 + 3;
-        cockpitPlate(ctx, text, clamp(x, margin, w - margin), y + (dy > .45 ? -15 : 8), "#ffdf9a", "#3e3535");
+        cockpitPlate(ctx, text, clamp(x, margin, w - margin), y + (Math.abs(dy) > .45 ? -15 : 8), "#ffdf9a", "#3e3535");
       }
     }
     if (g.lockTarget && g.lockProgress > 0) {
