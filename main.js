@@ -330,6 +330,67 @@ const patrol = (() => {
     el.onclick = fn;
     return el;
   }
+  const hangar = $("hangar");
+  let settlement = Promise.resolve();
+
+  function refreshWallet() {
+    const credits = PatrolHangar.read().credits;
+    $("deckCredits").textContent = credits + " cr";
+    $("wallet").textContent = credits + " credits";
+  }
+  function renderParts() {
+    const profile = PatrolHangar.read();
+    refreshWallet();
+    $("parts").replaceChildren();
+    for (const part of PatrolHangar.parts) {
+      const rank = profile.ranks[part.id];
+      const cost = PatrolHangar.prices[rank];
+      const row = document.createElement("section");
+      row.className = "part";
+      const info = document.createElement("div");
+      const title = document.createElement("h3");
+      title.textContent = part.name;
+      const description = document.createElement("p");
+      description.textContent = part.detail;
+      const level = document.createElement("small");
+      level.textContent = "Rank " + rank + " / " + PatrolHangar.prices.length;
+      info.append(title, description, level);
+      const buy = button(cost === undefined ? "Max rank" : cost + " cr", async () => {
+        buy.disabled = true;
+        const purchased = await PatrolHangar.purchase(part.id);
+        renderParts();
+        $("hangarStatus").textContent = purchased ? part.name + " installed." : "Balance or rank changed.";
+        if (PatrolHangar.sessionOnly) $("hangarStatus").textContent += " Saved for this visit.";
+        if (purchased) PatrolAudio.play("equip");
+        const next = $("parts").querySelector('[data-part="' + part.id + '"]:enabled') || hangar.querySelector('[type="submit"]');
+        next.focus({ preventScroll: true });
+      });
+      buy.dataset.part = part.id;
+      buy.disabled = cost === undefined || cost > profile.credits;
+      buy.setAttribute("aria-label", cost === undefined ? part.name + " at max rank" : "Upgrade " + part.name + " for " + cost + " credits");
+      row.append(PatrolUpgrades.icon(part.id), info, buy);
+      $("parts").append(row);
+    }
+  }
+  async function openHangar() {
+    await settlement;
+    $("hangarStatus").textContent = PatrolHangar.sessionOnly ? "Saved for this visit." : "";
+    renderParts();
+    if (!hangar.open) hangar.showModal();
+  }
+  $("openHangar").onclick = openHangar;
+  window.addEventListener("storage", () => {
+    refreshWallet();
+    if (hangar.open) renderParts();
+  });
+  function showEarnings() {
+    const bill = PatrolHangar.statement(g);
+    const lines = ["Flight time +" + bill.flight, "Targets +" + bill.combat, "Missions +" + bill.missions];
+    if (bill.bonus) lines.push("Carrier victory +" + bill.bonus);
+    $("earnedTotal").textContent = "Patrol earnings · " + bill.total + " credits";
+    $("earnedBreakdown").textContent = lines.join("  ·  ");
+    settlement = PatrolHangar.deposit(g, bill).then(refreshWallet);
+  }
   function start() {
     if (loadingMap) return;
     if (!world) {
@@ -341,7 +402,7 @@ const patrol = (() => {
     transition = null;
     paused = false;
     unlockSound();
-    g.start(minutes);
+    g.start(minutes, PatrolHangar.read().ranks);
     g.view = 0;
     carry = 0;
     lastPanel = "";
@@ -412,6 +473,10 @@ const patrol = (() => {
     modal.classList.toggle("upgrade-draft", phase === "draft");
     modal.classList.toggle("pause-menu", phase === "paused");
     $("pauseDetails").hidden = $("pauseRegion").hidden = phase !== "paused";
+    const debrief = ["won", "dead", "retired", "finished"].includes(phase);
+    $("earnings").hidden = !debrief;
+    if (debrief) showEarnings();
+    if (home) refreshWallet();
     modal.hidden = home || phase === "playing";
     $("flight").inert = !modal.hidden;
     if (modal.hidden) return;
@@ -421,10 +486,11 @@ const patrol = (() => {
     let title, detail, kicker;
     if (phase === "draft") {
       const rank = pilotLevel();
-      kicker = "Wave " + g.wave + " complete";
+      kicker = "Wave " + g.wave + (g.midwaveDraft ? " · " + g.missionTitle : " complete");
       if (g.choices.some((item) => item.id !== "service")) kicker += " · Level " + (rank + 1);
       title = "Upgrade your jet";
-      detail = g.lastReward || "Choose one upgrade for the next wave.";
+      detail = g.midwaveDraft ? "Choose an upgrade to resume this mission." :
+        g.lastReward || "Choose one upgrade for the next wave.";
       PatrolUpgrades.show(actions, g.choices, (id) => {
         if (!g.choose(id)) return;
         PatrolAudio.play("equip");
@@ -450,7 +516,11 @@ const patrol = (() => {
       }
       actions.append(
         button("Resume", pause, null, true),
-        button("End", flightDeck),
+        button("End", () => {
+          paused = false;
+          g.finish();
+          sync();
+        }),
       );
     } else if (phase === "won") {
       kicker = "Carrier destroyed";
@@ -472,7 +542,7 @@ const patrol = (() => {
         }),
       );
     } else {
-      kicker = phase === "dead" ? "Aircraft lost" : "Patrol complete";
+      kicker = phase === "dead" ? g.lossReason || "Aircraft lost" : phase === "retired" ? "Patrol ended" : "Patrol complete";
       title = phase === "dead" ? "End of patrol" : "Welcome home";
       detail =
         "Wave " +
@@ -480,7 +550,7 @@ const patrol = (() => {
         " reached · " +
         g.kills +
         " targets destroyed. Milestone unlocks carry into your next patrol.";
-      actions.append(button("Fly again", start, null, true), button("Flight deck", flightDeck));
+      actions.append(button("Hangar", openHangar, null, true), button("Fly again", start), button("Flight deck", flightDeck));
     }
     $("modalKicker").textContent = kicker;
     $("modalTitle").textContent = title;
@@ -518,6 +588,7 @@ const patrol = (() => {
   });
   $("stage").addEventListener("contextmenu", (e) => e.preventDefault());
   window.addEventListener("keydown", (e) => {
+    if (hangar.open) return;
     if (e.code === "Escape" && !e.repeat) {
       pause();
       return;
@@ -623,14 +694,14 @@ const patrol = (() => {
       }
       const dt = Math.min(0.1, raw);
       time += dt;
-      if (active() || g.state === "title") {
+      if (active() || g.state === "title" || g.state === "dead") {
         carry += dt;
         while (carry >= fixed) {
           g.step(fixed, input);
           input.missile = false;
           input.roll = 0;
           carry -= fixed;
-          if (!active() && g.state !== "title") {
+          if (!active() && g.state !== "title" && g.state !== "dead") {
             carry = 0;
             break;
           }
@@ -702,6 +773,7 @@ const patrol = (() => {
       loadingMap = false;
       $("progress").hidden = true;
       $("regionPick").disabled = $("launch").disabled = false;
+      $("openHangar").disabled = !world;
       $("launchText").textContent = world ? "Start patrol" : "Retry terrain";
     }
   }

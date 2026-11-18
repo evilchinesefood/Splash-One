@@ -128,12 +128,12 @@
     },
     beacons: {
       name: "Silent Shore",
-      detail: "Destroy the shore stations",
+      detail: "Clear the shore patrol and stations",
       groups: [
-        ["radar", "relay"],
+        ["cutter", "gunboat"],
         ["relay", "prism"],
       ],
-      bonus: "Silence all stations in 90 seconds",
+      bonus: "Clear the shore in 90 seconds",
     },
     rush: {
       name: "Crosswind",
@@ -168,16 +168,19 @@
       bonus: "Finish with your hull untouched",
     },
   };
+  // Hull half-extents (beam, height, length) are used for physical contact; radius is the weapon hit radius.
   const models = {
-    jet: { hp: 48, radius: 17, speed: 86 },
-    interceptor: { hp: 58, radius: 16, speed: 125 },
-    crescent: { hp: 31, radius: 14, speed: 99 },
-    bomber: { hp: 92, radius: 25, speed: 68 },
-    dart: { hp: 32, radius: 13, speed: 164 },
-    prism: { hp: 76, radius: 19, speed: 0 },
-    radar: { hp: 63, radius: 21, speed: 0 },
-    relay: { hp: 52, radius: 18, speed: 0 },
-    carrier: { hp: 1080, radius: 76, speed: 39 },
+    cutter: { hp: 44, radius: 17, speed: 22, boat: true, hull: [5, 4, 17] },
+    gunboat: { hp: 88, radius: 24, speed: 12, boat: true, hull: [7.5, 6, 25] },
+    jet: { hp: 48, radius: 17, speed: 86, hull: [8.5, 2.8, 11] },
+    interceptor: { hp: 58, radius: 16, speed: 125, hull: [8.5, 2.8, 11] },
+    crescent: { hp: 31, radius: 14, speed: 99, hull: [9, 2, 4] },
+    bomber: { hp: 92, radius: 25, speed: 68, hull: [23, 3, 13] },
+    dart: { hp: 32, radius: 13, speed: 164, hull: [6, 2.5, 13] },
+    prism: { hp: 76, radius: 19, speed: 0, hull: [8, 17, 8] },
+    radar: { hp: 63, radius: 21, speed: 0, hull: [8, 10, 8] },
+    relay: { hp: 52, radius: 18, speed: 0, hull: [5, 13, 5] },
+    carrier: { hp: 1080, radius: 76, speed: 39, hull: [51, 9, 52] },
   };
 
   function create(world, notify = () => {}) {
@@ -221,6 +224,8 @@
       elapsed: 0,
       view: 0,
       state: "title",
+      lossReason: "",
+      terrainWarning: false,
       upgrades: {},
       get loadout() {
         return Object.entries(gear)
@@ -232,12 +237,16 @@
       lockProgress: 0,
       target: null,
       choices: [],
+      midwaveDraft: false,
       wave: 0,
       waveCount: 6,
       missionTitle: "",
       objective: "",
       bonus: "",
       lastReward: "",
+      completedWaves: 0,
+      creditLedger: { paid: 0 },
+      mods: { cannon: 0, shield: 0, missiles: 0 },
       kills: 0,
       endless: false,
       start,
@@ -251,6 +260,9 @@
       missionTime,
       group,
       required,
+      waveTargetCount,
+      waveTargetsDestroyed,
+      midwaveAvailable,
       bonusIntact,
       gap,
       nextRaid;
@@ -281,7 +293,7 @@
       g.lastReward = g.lastReward ? g.lastReward + "  /  " + line : line;
       notify("message", line);
     }
-    function start(minutes = 10) {
+    function start(minutes = 10, installed = {}) {
       const count = clamp(Math.round((Number(minutes) || 10) / 2), 5, 20);
       sequence = ["sweep", "beacons", "rush", "nest", "moons"];
       const extras = ["rush", "nest", "moons"];
@@ -294,9 +306,14 @@
         wave: 0,
         waveCount: sequence.length,
         lastReward: "",
+        lossReason: "",
+        terrainWarning: false,
         kills: 0,
         choices: [],
         state: "playing",
+        completedWaves: 0,
+        creditLedger: { paid: 0 },
+        mods: { cannon: 0, shield: 0, missiles: 0, ...installed },
         endless: false,
         upgrades: Object.fromEntries(Object.keys(gear).map((id) => [id, 0])),
       });
@@ -315,6 +332,10 @@
       g.wave++;
       const key = sequence[g.wave - 1] || ["rush", "nest", "moons", "fleet"][(g.wave - g.waveCount - 1) % 4];
       mission = encounters[key];
+      waveTargetCount = mission.quota || mission.groups.reduce((sum, kinds) => sum + kinds.length, 0);
+      waveTargetsDestroyed = 0;
+      midwaveAvailable = true;
+      g.midwaveDraft = false;
       missionTime = group = gap = 0;
       nextRaid = 14;
       bonusIntact = true;
@@ -359,6 +380,7 @@
         bank: 0,
         mandatory,
         ground: model.speed === 0,
+        boat: !!model.boat,
         phase: Math.random() * TAU,
         fireIn: 2 + Math.random() * 4,
         bays: 2,
@@ -370,6 +392,39 @@
       };
       g.enemies.push(e);
       return e;
+    }
+    function spawnBoat(kind, x, z, mandatory) {
+      // Choose a stretch of navigable water for the whole patrol circuit, including its turning space.
+      for (let i = 0; i < 1600; i++) {
+        const radius = 114 * Math.sqrt(i), angle = i * 2.39996;
+        const cx = x + Math.cos(angle) * radius, cz = z + Math.sin(angle) * radius;
+        if (world.height(cx, cz) >= -3) continue;
+        let clear = true;
+        for (const dx of [-52, 0, 52]) {
+          for (const dz of [-105, 0, 105]) {
+            if (world.height(cx + dx, cz + dz) >= -3) clear = false;
+          }
+        }
+        if (!clear || g.enemies.some(e => e.boat && Math.hypot(e.patrolX-cx, e.patrolZ-cz) < 175)) continue;
+        const boat = spawn(kind, cx + 24, 2, cz, mandatory);
+        boat.patrolX = cx;
+        boat.patrolZ = cz;
+        boat.course = 0;
+        boat.yaw = 0;
+        return true;
+      }
+      return false;
+    }
+    function sail(e, dt) {
+      // Tangent heading follows the oval. Adjust angular speed to keep wake speed consistent through turns.
+      const t = e.course + dt * e.speed / Math.hypot(24 * Math.sin(e.course), 76 * Math.cos(e.course));
+      const x = e.patrolX + 24 * Math.cos(t), z = e.patrolZ + 76 * Math.sin(t);
+      if (world.height(x, z) >= -2) return;
+      e.course = t % TAU;
+      e.x = x; e.z = z;
+      e.y = 2 + 0.38 * Math.sin(e.age * 2 + e.phase);
+      e.yaw = Math.atan2(-24 * Math.sin(t), 76 * Math.cos(t));
+      e.bank = 0.025 * Math.sin(e.age * 1.3 + e.phase);
     }
     // Each three-ship flight has a lead and two wingmen. Offset entire flights
     // from one another so the approach reads as separate groups on the skyline.
@@ -402,7 +457,19 @@
       const ground = models[kinds[0]].speed === 0;
       const bearing = p.yaw + (group % 2 ? 0.45 : -0.1);
       required = mission.quota || kinds.length;
-      if (ground) {
+      if (models[kinds[0]].boat) {
+        for (const [i, kind] of kinds.entries()) {
+          const side = (i - (kinds.length - 1) / 2) * 320;
+          const x = p.x + Math.sin(bearing) * 730 + Math.cos(bearing) * side;
+          const z = p.z + Math.cos(bearing) * 730 - Math.sin(bearing) * side;
+          if (!spawnBoat(kind, x, z, true)) {
+            // A map without navigable water can still complete the shore encounter.
+            const site = landSite(x, z);
+            spawn("relay", site.x, world.height(site.x, site.z) + 6, site.z);
+          }
+        }
+        spawnFlights(["interceptor", "dart", "jet"], bearing + 0.3, 640, false);
+      } else if (ground) {
         const range = 2250 + group * 220;
         for (const [i, kind] of kinds.entries()) {
           const side = (i - (kinds.length - 1) / 2) * 360;
@@ -433,6 +500,8 @@
         const range = mission === encounters.sweep ? 300 : 660;
         spawnFlights(kinds, bearing, range, true);
       }
+      if (mission === encounters.sweep && group === 0)
+        spawnBoat("cutter", p.x + Math.sin(bearing + .45) * 520, p.z + Math.cos(bearing + .45) * 520, false);
       g.target = g.enemies.find((e) => e.mandatory && e.hp > 0) || null;
       updateObjective();
     }
@@ -442,12 +511,11 @@
         return;
       }
       if (mission.quota) {
-        g.objective = mission.quota - required + "/" + mission.quota + " jets destroyed · first upgrade";
+        g.objective = waveTargetsDestroyed + "/" + mission.quota + " jets destroyed" +
+          (midwaveAvailable ? " · upgrade at " + Math.ceil(mission.quota / 2) : "");
         return;
       }
-      const total = mission.groups.reduce((n, a) => n + a.length, 0);
-      const ahead = mission.groups.slice(group + 1).reduce((n, a) => n + a.length, 0);
-      g.objective = mission.detail + (total > 1 ? "  ·  " + (total - ahead - required) + "/" + total : "");
+      g.objective = mission.detail + (waveTargetCount > 1 ? "  ·  " + waveTargetsDestroyed + "/" + waveTargetCount : "");
     }
     function draftChoices() {
       const pool = Object.keys(gear).filter(
@@ -476,7 +544,16 @@
         description: gear[id].levels[g.upgrades[id]],
       }));
     }
+    function atMidpoint() {
+      if (mission.duration) return missionTime >= mission.duration / 2;
+      if (mission === encounters.fleet && required > 0) {
+        const carrier = g.enemies.find(e => e.kind === "carrier");
+        return carrier && carrier.hp <= carrier.maxHp / 2;
+      }
+      return waveTargetsDestroyed >= Math.ceil(waveTargetCount / 2);
+    }
     function endWave() {
+      g.completedWaves++;
       const p = g.player;
       const timed = mission === encounters.nest || mission === encounters.beacons;
       const earned = timed ? missionTime <= 90 : bonusIntact;
@@ -505,7 +582,10 @@
         recharge = 0;
       } else g.upgrades[id]++;
       g.choices = [];
-      nextWave();
+      if (g.midwaveDraft) {
+        g.midwaveDraft = false;
+        g.state = "playing";
+      } else nextWave();
       return true;
     }
     function continueRun() {
@@ -515,7 +595,8 @@
       g.choices = draftChoices();
     }
     function finish() {
-      if (g.state === "won" || (g.endless && g.state === "draft")) g.state = "finished";
+      if (g.state === "playing") g.state = "retired";
+      else if (g.state === "won" || (g.endless && g.state === "draft")) g.state = "finished";
     }
 
     function forward(e) {
@@ -552,7 +633,9 @@
       const sy = Math.sin(p.yaw),
         cy = Math.cos(p.yaw);
       const floor = Math.max(0, world.height(p.x + sy * p.speed * 0.8, p.z + cy * p.speed * 0.8));
-      climb = Math.max(climb, Math.min(0.85, (floor + 7 - p.y) / Math.max(30, p.speed * 0.6)));
+      // The title flyby and north-up camera control their own altitude.
+      if (title || !steering || g.view === 2)
+        climb = Math.max(climb, Math.min(0.85, (floor + 12 - p.y) / Math.max(30, p.speed * 0.6)));
       p.pitch = ease(p.pitch, climb, 3, dt);
       p.bank = ease(p.bank, turn * 0.6, 4.2, dt);
       if (input.roll && rollClock <= 0) {
@@ -566,14 +649,63 @@
       p.x += f[0] * p.speed * dt;
       p.z += f[2] * p.speed * dt;
       const surface = Math.max(0, world.height(p.x, p.z));
-      p.y = clamp(p.y + f[1] * p.speed * dt, surface + 6, Math.max(2300, surface + 100));
+      p.y = Math.min(p.y + f[1] * p.speed * dt, Math.max(2300, surface + 100));
+      if (title) p.y = Math.max(surface + 8, p.y);
+      g.terrainWarning = !title && (p.y < surface + 12 || p.y + f[1] * p.speed * 0.8 < floor + 12);
       p.vy = ease(p.vy, (p.y - oldY) / dt, 4, dt);
       p.gForce = Math.sqrt(1 + ((turn * p.speed) / 60) ** 2);
       p.hitFlash = Math.max(0, p.hitFlash - dt * 2);
       if (g.time - lastDamage > 5 - (g.upgrades.shield ? 1.7 : 0)) {
         const was = p.shield;
-        p.shield = Math.min(100, p.shield + dt * (g.upgrades.shield >= 2 ? 22 : 11));
+        p.shield = Math.min(100, p.shield + dt * ((g.upgrades.shield >= 2 ? 22 : 11) + 2 * g.mods.shield));
         if (was < 100 && p.shield === 100) sound("shield");
+      }
+    }
+
+    // Probe the belly, nose, tail and wingtips so a low banking pass can clip the surface.
+    const contactPoints = [[0, -1, 0], [0, 0, 11], [0, 0, -9], [-8.5, 0, -4], [8.5, 0, -4]];
+    function checkCrash() {
+      const p = g.player, f = forward(p);
+      const bank = p.bank + p.roll, sb = Math.sin(bank), cb = Math.cos(bank);
+      const sy = Math.sin(p.yaw), cy = Math.cos(p.yaw), sp = f[1], cp = Math.cos(p.pitch);
+      const nearby = [];
+      function checkNearby(unit) {
+        const extents = (models[unit.kind] || models.jet).hull;
+        if (distance(p, unit) <= Math.max(...extents) + 26)
+          nearby.push({ unit, extents, sin: Math.sin(unit.yaw), cos: Math.cos(unit.yaw) });
+      }
+      for (const e of g.enemies) if (e.hp > 0) checkNearby(e);
+      for (const wingman of g.allies) checkNearby(wingman);
+      for (const [side, up, fore] of contactPoints) {
+        const lateral = side * cb + up * sb, vertical = up * cb - side * sb;
+        const along = fore * cp - vertical * sp;
+        const x = p.x + along * sy + lateral * cy, z = p.z + along * cy - lateral * sy;
+        const y = p.y + fore * sp + vertical * cp;
+        const terrain = world.height(x, z), surface = Math.max(0, terrain);
+        let reason = "";
+        if (y <= surface) reason = terrain <= 0 ? "Water impact" : "Terrain impact";
+        else {
+          for (const {unit, extents, sin, cos} of nearby) {
+            const dx = x - unit.x, dz = z - unit.z;
+            const centerY = unit.ground ? world.height(unit.x, unit.z) + extents[1]
+              : unit.boat ? extents[1] : unit.y;
+            const nx = (dx * cos - dz * sin) / (extents[0] + 1);
+            const nz = (dx * sin + dz * cos) / (extents[2] + 1);
+            const ny = (y - centerY) / (extents[1] + 1);
+            if (nx * nx + ny * ny + nz * nz <= 1) {
+              reason = unit.ground || unit.boat ? "Surface collision" : "Midair collision";
+              break;
+            }
+          }
+        }
+        if (reason) {
+          p.shield = p.hull = 0;
+          p.hitFlash = 1;
+          g.state = "dead";
+          g.lossReason = reason;
+          impact(x, Math.max(y, surface), z, 21, y <= surface);
+          return;
+        }
       }
     }
 
@@ -648,9 +780,10 @@
         g.player.shield = Math.min(100, g.player.shield + 4 * g.upgrades.siphon);
         sound("shield");
       }
-      impact(e.x, e.y, e.z, e.kind === "carrier" ? 39 : 13, groundUnit(e));
+      impact(e.x, e.y, e.z, e.kind === "carrier" ? 39 : 13, groundUnit(e) || e.boat);
       if (e.mandatory && required > 0) {
         required--;
+        waveTargetsDestroyed++;
         updateObjective();
       }
     }
@@ -746,7 +879,7 @@
             y: p.y + f[1] * 12 - 0.65,
             z: p.z + f[2] * 12 - Math.sin(p.yaw) * offset,
           };
-          shot("cannon", nose, f, p.speed + 615, cannon ? 16 : 11, 1.64);
+          shot("cannon", nose, f, p.speed + 615, (cannon ? 16 : 11) + 2 * g.mods.cannon, 1.64);
         }
         const volleysPerSecond = cannon >= 2 ? 7.5 : 5.625;
         shotTimer += 1 / (volleysPerSecond * (g.rapidFireRemaining > 0 ? 2 : 1));
@@ -775,7 +908,7 @@
       }
       if (p.missiles < 4) {
         recharge += dt;
-        if (recharge >= 4.7 - rail * 0.82) {
+        if (recharge >= 4.7 - rail * 0.82 - g.mods.missiles * 0.25) {
           p.missiles++;
           recharge = 0;
         }
@@ -949,7 +1082,8 @@
         e.age += dt;
         e.hitFlash = Math.max(0, e.hitFlash - dt);
         const d = distance(p, e);
-        if (!groundUnit(e)) {
+        if (e.boat) sail(e, dt);
+        else if (!groundUnit(e)) {
           let wanted, altitude;
           if (e.kind === "carrier") {
             wanted = e.yaw + 0.23 * Math.sin(e.age * 0.06);
@@ -1018,7 +1152,7 @@
             z: p.z + f[2] * p.speed * lead,
           };
           const source = { x: e.x, y: e.y + (prism ? 12 : e.ground ? 5 : 0), z: e.z };
-          if (prism || bomber) {
+          if (prism || bomber || e.kind === "gunboat") {
             const direction = aim(source, target);
             const spacing = prism ? .10 : .17;
             for (const theta of [-spacing, 0, spacing]) {
@@ -1164,6 +1298,8 @@
       missionTime += dt;
       flight(dt, input);
       enemies(dt);
+      checkCrash();
+      if (g.state === "dead") return;
       targeting(dt);
       g.rapidFireRemaining = Math.max(0, g.rapidFireRemaining - dt);
       updatePickup();
@@ -1176,6 +1312,15 @@
       effects(dt);
       g.enemies = g.enemies.filter((e) => e.hp > 0);
       if (g.state !== "playing") return;
+      if (midwaveAvailable && atMidpoint()) {
+        midwaveAvailable = false;
+        g.midwaveDraft = true;
+        g.state = "draft";
+        g.choices = draftChoices();
+        updateObjective();
+        sound("upgrade");
+        return;
+      }
       if (mission.duration) {
         updateObjective();
         if (missionTime >= mission.duration) {
@@ -1194,7 +1339,7 @@
       if (required && missionTime >= nextRaid && (mission.quota || groundUnit(g.target || {}))) {
         nextRaid = missionTime + 14;
         const inRange = (e) => distance(g.player, e) < 1500;
-        if (!g.enemies.some((e) => !groundUnit(e) && inRange(e))) {
+        if (!g.enemies.some((e) => !groundUnit(e) && !e.boat && inRange(e))) {
           g.enemies = g.enemies.filter((e) => e.mandatory && !mission.quota);
           spawnFlights(["jet", "interceptor", "jet"], g.player.yaw - 0.25, 600, !!mission.quota);
           g.target = g.enemies.find((e) => e.mandatory) || null;

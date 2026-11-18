@@ -745,3 +745,48 @@ body.cockpit #meters {
   .touch-active #bonus { display: none; }
 
 }
+
+.deck-actions { display: flex; align-items: stretch; gap: 8px; flex-wrap: wrap; }
+.hangar-link, .part .action {
+  border: 1px solid #967b79; background: #37303c; color: var(--paper);
+  padding: 8px 14px; font-weight: 700;
+}
+.hangar-link span { display: block; font: 11px ui-monospace, monospace; color: #ffcf91; }
+#earnings {
+  display: grid; gap: 5px; margin: 12px 0 18px; padding: 12px 14px;
+  border-left: 3px solid #ffc18b; background: #423744;
+}
+#earnedTotal { color: #ffcf91; font-size: 18px; }
+#earnedBreakdown { font-size: 13px; color: #f7e8d7; line-height: 1.4; }
+#hangar {
+  width: min(565px, calc(100% - 24px)); max-height: 92dvh; overflow: hidden;
+  background: #2d2733; color: var(--paper); box-sizing: border-box;
+  border: 1px solid #b29486; border-top: 4px solid var(--peach);
+  padding: clamp(14px, 3vw, 28px);
+}
+#hangar::backdrop { background: #171421c9; }
+#hangar[open] { display: flex; flex-direction: column; }
+.hangar-heading, .part { display: flex; gap: 12px; align-items: center; }
+.hangar-heading { justify-content: space-between; }
+.hangar-heading h2 { margin: 0; }
+#wallet { color: #ffe1a6; font: bold 15px ui-monospace, monospace; }
+#hangar > p { margin: 10px 0 15px; line-height: 1.4; }
+#parts { display: grid; gap: 8px; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.part { background: #39313e; padding: 10px 12px; border: 1px solid #6b5965; }
+.part canvas { width: 64px; height: auto; image-rendering: pixelated; }
+.part h3 { margin: 0; font-size: 17px; }
+.part p { margin: 3px 0; line-height: 1.35; font-size: 14px; }
+.part small { color: #ffcf91; }
+.part .action { margin-left: auto; min-width: 74px; min-height: 44px; text-align: center; white-space: nowrap; }
+.part .action:enabled { color: #312932; background: #ffba86; }
+.part .action:disabled { opacity: .7; cursor: default; }
+#hangar form { display: flex; justify-content: end; }
+#hangar form button { min-width: 90px; text-align: center; }
+#hangarStatus:empty { display: none; }
+#hangarStatus { color: #ffcf91; }
+#parts + #hangarStatus:empty + form { margin-top: 12px; }
+@media (max-width: 440px) {
+  .part { gap: 8px; padding: 9px; }
+  .part canvas { display: none; }
+  .deck-actions #launch { min-width: 150px; }
+}

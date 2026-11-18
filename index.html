@@ -14,6 +14,7 @@
     <script defer src="art.js"></script>
     <script defer src="audio.js"></script>
     <script defer src="upgrades.js"></script>
+    <script defer src="hangar.js"></script>
     <script defer src="main.js"></script>
   </head>
   <body>
@@ -53,9 +54,12 @@
             ><button data-duration="20" aria-pressed="false">20 min</button>
           </div>
         </div>
-        <button id="launch" class="primary" disabled>
-          <span id="launchText">Charting terrain</span><b aria-hidden="true">→</b><i id="progress"></i>
-        </button>
+        <div class="deck-actions">
+          <button id="launch" class="primary" disabled>
+            <span id="launchText">Charting terrain</span><b aria-hidden="true">→</b><i id="progress"></i>
+          </button>
+          <button id="openHangar" type="button" class="hangar-link" disabled>Hangar <span id="deckCredits">0 cr</span></button>
+        </div>
       </section>
       <div id="flight" hidden>
         <div id="mission">
@@ -161,9 +165,22 @@
               </div>
             </section>
           </div>
+          <div id="earnings" hidden>
+            <strong id="earnedTotal"></strong><span id="earnedBreakdown"></span>
+          </div>
           <div id="actions"></div>
         </div>
       </section>
+      <dialog id="hangar" aria-labelledby="hangarTitle">
+        <div class="hangar-heading">
+          <h2 id="hangarTitle">Hangar</h2>
+          <strong id="wallet"></strong>
+        </div>
+        <p>Install permanent upgrades for your next patrol.</p>
+        <div id="parts"></div>
+        <p id="hangarStatus" role="status"></p>
+        <form method="dialog"><button class="action" type="submit">Back</button></form>
+      </dialog>
       <div id="touch" hidden>
         <div id="stick"><i></i></div>
         <div class="pad">

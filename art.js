@@ -527,8 +527,63 @@
     }
     return mesh;
   }
-  const contactNames = { bomber: "BROADWING", dart: "DART", prism: "PRISM" };
+  function buildBoat(heavy) {
+    const m = [], w = heavy ? 7.5 : 5, length = heavy ? 25 : 17;
+    const deck = [[-w,1,-length*.88],[w,1,-length*.88],[w,1,length*.34],
+      [0,2,length],[-w,1,length*.34]];
+    const chine = deck.map(([x,y,z]) => [x*.78,-1.5,z*.94]);
+    surface(m, deck, heavy ? "#697887" : "#85919a");
+    for (let i = 0; i < deck.length; i++) {
+      const j = (i+1) % deck.length;
+      surface(m,[deck[i],deck[j],chine[j],chine[i]],i%2 ? "#3c4c63" : "#50627a");
+    }
+    function cabin(x, y, z, width, height, depth, palette) {
+      const floor = [[x-width,y,z-depth],[x+width,y,z-depth],[x+width,y,z+depth],[x-width,y,z+depth]];
+      const roof = floor.map(([vx,vy,vz]) => [x+(vx-x)*.84,vy+height,z+(vz-z)*.88]);
+      for (let i=0;i<4;i++) {
+        const j=(i+1)%4;
+        surface(m,[floor[i],floor[j],roof[j],roof[i]],palette[i]);
+      }
+      surface(m,roof,palette[3]);
+    }
+    const bridge = heavy ? 5.6 : 3.7;
+    cabin(0,1,-length*.16,w*.72,bridge,heavy?6.2:3.7,slate);
+    cabin(0,bridge+1,-length*.16,w*.60,1.45,heavy?4.7:2.8,azure);
+    cabin(0,bridge+2.45,-length*.16,w*.64,.48,heavy?4.9:2.95,steel);
+    // Scarlet bow band and the raised wheelhouse distinguish hulls from aircraft at a glance.
+    surface(m,[[-w*.88,1.12,length*.40],[w*.88,1.12,length*.40],[w*.67,1.42,length*.55],[-w*.67,1.42,length*.55]],red[2]);
+    cabin(0,1.25,length*.32,w*.37,2.2,2.1,night);
+    for (const x of heavy ? [-1.2,1.2] : [0]) {
+      loft(m,[[length*.35,x,3,.46,.45],[length*.65,x,4.55,.32,.32]],steel);
+    }
+    if (heavy) cabin(0,1,-length*.62,2.8,2.2,3.4,red);
+    const mastZ = -length*.28, mastTop = heavy ? 12 : 8;
+    surface(m,[[-.46,bridge+2.5,mastZ],[.46,bridge+2.5,mastZ],[0,mastTop,mastZ]],steel[2]);
+    surface(m,[[-1.1,mastTop-.7,mastZ],[1.1,mastTop-.7,mastZ],[0,mastTop+.48,mastZ]],"#ffb479","lamp");
+    return m;
+  }
+
+  function boatWake(ctx, g, e, project) {
+    const heavy = e.kind === "gunboat", stern = heavy ? 22 : 15;
+    const dx = Math.sin(e.yaw), dz = Math.cos(e.yaw);
+    const reach = Math.min(stern*2.6, e.age*e.speed);
+    if (reach < 3) return;
+    for (const side of [-1,1]) {
+      let previous;
+      for (let i=0;i<=4;i++) {
+        const behind = stern + i*reach/4, width = side*(stern*.28 + i*reach*.065);
+        const x = e.x - dx*behind + dz*width, z = e.z - dz*behind - dx*width;
+        if (g.world.height(x,z) > 0) break;
+        const pt = project(x,.45,z);
+        if (previous && pt) line(ctx,previous.x,previous.y,pt.x,pt.y,i%2 ? "#c3e4db" : "#74b7b8");
+        previous=pt;
+      }
+    }
+  }
+  const contactNames = { cutter: "CUTTER", gunboat: "GUNBOAT", bomber: "BROADWING", dart: "DART", prism: "PRISM" };
   const meshes = {
+    cutter: buildBoat(false),
+    gunboat: buildBoat(true),
     jet: rivalMesh,
     interceptor: rivalMesh,
     bomber: buildBroadwing(),
@@ -771,7 +826,12 @@
     const x = Math.round(p.x),
       y = Math.round(p.y),
       ground = e.ground;
-    if (ground) {
+    if (e.boat) {
+      const half = e.kind === "gunboat" ? 5 : 3;
+      polygon(ctx,[[x-half,y],[x+half,y],[x+half-2,y+2],[x-half+1,y+2]],"#47566c");
+      line(ctx,x-1,y-1,x+1,y-1,"#e3bf9d");
+      ctx.fillStyle = "#e5886c"; ctx.fillRect(x,y-2,1,1);
+    } else if (ground) {
       ctx.fillStyle = dark;
       ctx.fillRect(x - 2, y - 1, 5, 3);
       ctx.fillStyle = e.kind === "prism" ? "#efb0ff" : "#f7b66f";
@@ -1164,7 +1224,7 @@
     label(ctx, (e.gForce || 1).toFixed(1) + " G", cx - atX, fy + 22, col, "center");
     label(ctx, "R " + Math.round(agl * 3.28084), cx + atX, fy + 22, col, "center");
     label(ctx, "MSL " + e.missiles, cx, cy + h * 0.12, col, "center");
-    const warning = agl < 17 ? "PULL UP" : e.hull < 40 ? "HULL" : e.shield < 20 ? "SHIELD" : "";
+    const warning = g.terrainWarning ? "PULL UP" : e.hull < 40 ? "HULL" : e.shield < 20 ? "SHIELD" : "";
     if (warning && Math.sin(g.time * 9) > -0.25) label(ctx, warning, cx, cy - h * 0.1, "#ffc178", "center");
   }
 
@@ -1611,7 +1671,7 @@
       if (inScreen(a, 65) && visible(g, cam, e)) objects.push({ type: "pickup", e, a, d: a.d });
     }
     const pp = project(p.x, p.y, p.z);
-    if (pp && blend < 0.52) objects.push({ type: "player", e: p, a: pp, d: pp.d });
+    if (pp && blend < 0.52 && g.state !== "dead") objects.push({ type: "player", e: p, a: pp, d: pp.d });
     objects.sort((a, b) => b.d - a.d);
     for (const { type, e, a } of objects) {
       if (type === "pickup") {
@@ -1664,7 +1724,8 @@
       if (fighter) {
         drawTrails(ctx, g, trailState(g, basis(e), e), project, e);
       }
-      if (a.k * (carrier ? 50 : e.kind === "bomber" ? 23 : 8) < 4) {
+      if (e.boat) boatWake(ctx, g, e, project);
+      if (a.k * (carrier ? 50 : e.kind === "bomber" || e.boat ? 23 : 8) < 4) {
         compactAircraft(ctx, a, e, g.world.night, friendly);
         if (e.kind === "prism") prismCharge(ctx,e,project);
         continue;
@@ -1677,7 +1738,7 @@
         mesh = mesh.concat(exhaustMesh(carrier ? carrierNozzle : jetNozzle, g.time, false));
       drawMesh(ctx, base, mesh, eb, project, 0, g.world.night);
       if (e.kind === "prism") prismCharge(ctx,e,project);
-      if (g.world.night && !ground) nightLights(ctx,e,eb,project,g.time);
+      if (g.world.night && !ground && !e.boat) nightLights(ctx,e,eb,project,g.time);
     }
     if (g.state !== "title") {
       if (blend > 0.04) {
@@ -1691,6 +1752,12 @@
         ctx.globalAlpha = 1;
       }
       cues(ctx, g, cam, project, b);
+      if (g.state === "playing" && blend < 0.5 && g.terrainWarning && Math.sin(g.time * 9) > -0.25) {
+        const y = Math.round(h * 0.39);
+        ctx.fillStyle = "#482e34";
+        ctx.fillRect(Math.round(w / 2) - 17, y - 2, 34, 9);
+        label(ctx, "PULL UP", Math.round(w / 2), y, "#ffd080", "center");
+      }
       if (g.rapidFireRemaining > 0) {
         const style = pickupStyles.rapid;
         const text = "RAPID FIRE " + Math.ceil(g.rapidFireRemaining) + "S";
