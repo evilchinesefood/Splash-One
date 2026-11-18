@@ -311,7 +311,7 @@ window.PatrolUpgrades = (() => {
     return el;
   }
 
-  function show(actions, choices, choose) {
+  function show(actions, choices, choose, options = {}) {
     actions.replaceChildren();
     actions.style.setProperty("--choice-count", choices.length);
     let committed = false;
@@ -319,9 +319,10 @@ window.PatrolUpgrades = (() => {
       const style = gear[item.id] || gear.service;
       const card = element("button", "upgrade-card", "");
       card.type = "button";
+      card.classList.toggle("banish-choice", !!options.banishing);
       card.style.setProperty("--gear-color", style.color);
       card.style.setProperty("--slot", index);
-      const change = item.id === "service" ? "Resupply"
+      const change = options.banishing ? "Banish for this patrol" : item.id === "service" ? "Resupply"
         : item.level === 1 ? "New · Level 1" : "Level " + (item.level - 1) + " → " + item.level;
       const art = element("span", "gear-art", "");
       art.append(illustration(style));
@@ -345,7 +346,7 @@ window.PatrolUpgrades = (() => {
       };
       actions.append(card);
     }
-    celebrate(actions.parentElement);
+    if (options.celebrate !== false) celebrate(actions.parentElement);
   }
 
   function icon(id, width) {

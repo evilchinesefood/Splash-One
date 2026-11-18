@@ -206,6 +206,16 @@
       [-frame.tip, 0, frame.tipZ], [frame.tip, 0, frame.tipZ]];
   }
 
+  function tunedFrame(id, ranks = {}) {
+    const base = Object.hasOwn(airframes, id) ? airframes[id] : airframes.kestrel;
+    const speed = 1 + .05 * (ranks.speed || 0);
+    return { ...base, cruise: base.cruise * speed, boost: base.boost * speed,
+      handling: base.handling * (1 + .06 * (ranks.turn || 0)),
+      maxHull: 100 + 12 * (ranks.hull || 0), maxShield: 100 + 12 * (ranks.capacity || 0),
+      damage: base.damage + 2 * (ranks.cannon || 0), rate: base.rate * (1 + .06 * (ranks.rate || 0)),
+    };
+  }
+
   function create(world, notify = () => {}) {
     let saved = [];
     try {
@@ -215,7 +225,7 @@
       /* Private sessions still keep discoveries for this visit. */
     }
 
-    const freshPlayer = (frame = airframes.kestrel) => ({
+    const freshPlayer = (frame = tunedFrame("kestrel")) => ({
       frame,
       x: 0,
       y: Math.max(140, world.height(0, 0) + 80),
@@ -224,8 +234,8 @@
       pitch: 0,
       bank: 0,
       speed: frame.cruise,
-      shield: 100,
-      hull: 100,
+      shield: frame.maxShield,
+      hull: frame.maxHull,
       boost: false,
       brake: false,
       missiles: 4,
@@ -276,6 +286,13 @@
       start,
       step,
       choose,
+      reroll,
+      banish,
+      respawn,
+      get canReroll() {
+        return this.state === "draft" && this.charges.reroll > 0 &&
+          eligibleGear().some(id => !this.choices.some(choice => choice.id === id));
+      },
       continueRun,
       finish,
     };
@@ -290,7 +307,7 @@
       bonusIntact,
       gap,
       nextRaid;
-    let nextPickupAt = Infinity;
+    let nextPickupAt = Infinity, volley = 0;
     let shotTimer = 0,
       recharge = 0,
       rollClock = 0,
@@ -317,14 +334,16 @@
       g.lastReward = g.lastReward ? g.lastReward + "  /  " + line : line;
       notify("message", line);
     }
-    function start(minutes = 10, installed = {}, frameId = "kestrel") {
+    function start(minutes = 10, installed = {}, frameId = "kestrel", fleet = {}) {
       const count = clamp(Math.round((Number(minutes) || 10) / 2), 5, 20);
       sequence = ["sweep", "beacons", "rush", "nest", "moons"];
       const extras = ["rush", "nest", "moons"];
       for (let i = 5; i < count; ++i) sequence.push(extras[(i - 5) % extras.length]);
       sequence.push("fleet");
       Object.assign(g, {
-        player: freshPlayer(Object.hasOwn(airframes, frameId) ? airframes[frameId] : airframes.kestrel),
+        player: freshPlayer(tunedFrame(frameId, installed)),
+        fleet: { reroll: 0, banish: 0, respawn: 0, ...fleet },
+        banished: new Set(),
         time: 0,
         elapsed: 0,
         wave: 0,
@@ -342,6 +361,8 @@
         upgrades: Object.fromEntries(Object.keys(gear).map((id) => [id, 0])),
       });
       g.wisps.length = g.shots.length = g.particles.length = 0;
+      g.charges = { ...g.fleet };
+      volley = 0;
       nextPickupAt = 10;
       g.rapidFireRemaining = 0;
       g.pickup = null;
@@ -541,15 +562,19 @@
       }
       g.objective = mission.detail + (waveTargetCount > 1 ? "  ·  " + waveTargetsDestroyed + "/" + waveTargetCount : "");
     }
-    function draftChoices() {
-      const pool = Object.keys(gear).filter(
-        (id) => (!discoveries[id] || g.unlocks.includes(id)) && g.upgrades[id] < gear[id].levels.length,
+    function eligibleGear() {
+      return Object.keys(gear).filter(
+        (id) => !g.banished.has(id) && (!discoveries[id] || g.unlocks.includes(id)) && g.upgrades[id] < gear[id].levels.length,
       );
+    }
+    function draftChoices(previous = []) {
+      const pool = eligibleGear();
       // Rotate less-seen equipment into the draft while reserving room to level an owned item.
-      const candidates = shuffled(pool).sort((a, b) => (offered[a] || 0) - (offered[b] || 0));
+      const candidates = shuffled(pool).sort((a, b) =>
+        Number(previous.includes(a)) - Number(previous.includes(b)) || (offered[a] || 0) - (offered[b] || 0));
       const ids = candidates.slice(0, 3);
       const owned = pool.filter((id) => g.upgrades[id]);
-      if (owned.length && !ids.some((id) => g.upgrades[id]))
+      if (!previous.length && owned.length && !ids.some((id) => g.upgrades[id]))
         ids[0] = owned[Math.floor(Math.random() * owned.length)];
       if (!ids.length)
         return [
@@ -560,13 +585,33 @@
             description: "Recharge the shield and reload all four missile rails.",
           },
         ];
-      for (const id of ids) offered[id] = (offered[id] || 0) + 1;
-      return ids.map((id) => ({
+      return ids.map(offer);
+    }
+    function offer(id) {
+      offered[id] = (offered[id] || 0) + 1;
+      return {
         id,
         name: gear[id].name,
         level: g.upgrades[id] + 1,
         description: gear[id].levels[g.upgrades[id]],
-      }));
+      };
+    }
+    function reroll() {
+      if (!g.canReroll) return false;
+      g.choices = draftChoices(g.choices.map(choice => choice.id));
+      g.charges.reroll--;
+      return true;
+    }
+    function banish(id) {
+      if (g.state !== "draft" || !g.charges.banish || id === "service" ||
+          !g.choices.some(choice => choice.id === id)) return false;
+      g.banished.add(id);
+      g.charges.banish--;
+      const alternatives = shuffled(eligibleGear()).filter(key => !g.choices.some(choice => choice.id === key));
+      g.choices = g.choices.flatMap(choice => choice.id !== id ? [choice] :
+        alternatives.length ? [offer(alternatives[0])] : []);
+      if (!g.choices.length) g.choices = draftChoices();
+      return true;
     }
     function atMidpoint() {
       if (mission.duration) return missionTime >= mission.duration / 2;
@@ -582,11 +627,11 @@
       const timed = mission === encounters.nest || mission === encounters.beacons;
       const earned = timed ? missionTime <= 90 : bonusIntact;
       g.lastReward = earned
-        ? p.hull === 100
+        ? p.hull === p.frame.maxHull
           ? "Bonus complete · hull at 100%"
           : "Bonus complete · hull repaired"
         : "";
-      if (earned) p.hull = Math.min(100, p.hull + 30);
+      if (earned) p.hull = Math.min(p.frame.maxHull, p.hull + 30);
       if (mission === encounters.beacons && earned) unlock("comet");
       if (mission === encounters.fleet) unlock("arc");
       g.state = g.wave === g.waveCount ? "won" : "draft";
@@ -601,7 +646,7 @@
     function choose(id) {
       if (g.state !== "draft" || !g.choices.some((c) => c.id === id)) return false;
       if (id === "service") {
-        g.player.shield = 100;
+        g.player.shield = g.player.frame.maxShield;
         g.player.missiles = 4;
         recharge = 0;
       } else g.upgrades[id]++;
@@ -619,7 +664,8 @@
       g.choices = draftChoices();
     }
     function finish() {
-      if (g.state === "playing") g.state = "retired";
+      if (g.state === "downed") g.state = "dead";
+      else if (g.state === "playing") g.state = "retired";
       else if (g.state === "won" || (g.endless && g.state === "draft")) g.state = "finished";
     }
 
@@ -648,7 +694,7 @@
       const boost = !!input.boost && !p.brake && !title;
       if (boost && !p.boost && g.time - enteredBoost > 4) {
         enteredBoost = g.time;
-        if (g.upgrades.comet) p.shield = Math.min(100, p.shield + 6 * g.upgrades.comet);
+        if (g.upgrades.comet) p.shield = Math.min(p.frame.maxShield, p.shield + 6 * g.upgrades.comet);
       }
       p.boost = boost;
       const cruise = p.brake ? p.frame.cruise * (60 / 112) : p.frame.cruise;
@@ -682,8 +728,8 @@
       p.hitFlash = Math.max(0, p.hitFlash - dt * 2);
       if (g.time - lastDamage > 5 - (g.upgrades.shield ? 1.7 : 0)) {
         const was = p.shield;
-        p.shield = Math.min(100, p.shield + dt * ((g.upgrades.shield >= 2 ? 22 : 11) + 2 * g.mods.shield));
-        if (was < 100 && p.shield === 100) sound("shield");
+        p.shield = Math.min(p.frame.maxShield, p.shield + dt * ((g.upgrades.shield >= 2 ? 22 : 11) + 2 * g.mods.shield));
+        if (was < p.frame.maxShield && p.shield === p.frame.maxShield) sound("shield");
       }
     }
 
@@ -725,8 +771,7 @@
         if (reason) {
           p.shield = p.hull = 0;
           p.hitFlash = 1;
-          g.state = "dead";
-          g.lossReason = reason;
+          loseAircraft(reason);
           impact(x, Math.max(y, surface), z, 21, y <= surface);
           return;
         }
@@ -800,8 +845,8 @@
         return;
       }
       if (!allied) g.kills++;
-      if (!allied && g.upgrades.siphon && g.player.hull > 0 && g.player.shield < 100) {
-        g.player.shield = Math.min(100, g.player.shield + 4 * g.upgrades.siphon);
+      if (!allied && g.upgrades.siphon && g.player.hull > 0 && g.player.shield < g.player.frame.maxShield) {
+        g.player.shield = Math.min(g.player.frame.maxShield, g.player.shield + 4 * g.upgrades.siphon);
         sound("shield");
       }
       impact(e.x, e.y, e.z, e.kind === "carrier" ? 39 : 13, groundUnit(e) || e.boat);
@@ -813,6 +858,7 @@
     }
     function hurt(amount) {
       const p = g.player;
+      if (g.state !== "playing") return;
       if (p.roll && rollClock > 0.17 && rollClock < 0.63) return;
       const absorb = Math.min(p.shield, amount * (g.upgrades.shield === 3 ? 0.72 : 1));
       const leak = Math.max(0, amount - absorb / (g.upgrades.shield === 3 ? 0.72 : 1));
@@ -825,10 +871,42 @@
       lastDamage = g.time;
       sound(leak > 0.01 ? "hurt" : "deflect");
       if (p.hull <= 0) {
-        g.state = "dead";
+        loseAircraft("Aircraft lost");
         impact(p.x, p.y, p.z, 21);
       }
     }
+    function loseAircraft(reason) {
+      g.lossReason = reason;
+      bonusIntact = false;
+      g.state = g.charges.respawn > 0 ? "downed" : "dead";
+    }
+    function respawn() {
+      if (g.state !== "downed" || g.charges.respawn <= 0) return false;
+      const lost = g.player;
+      const p = freshPlayer(lost.frame);
+      // Enter behind the impact, clear of the terrain and nearby aircraft.
+      p.yaw = lost.yaw;
+      const sx = Math.sin(p.yaw), sz = Math.cos(p.yaw);
+      p.x = lost.x - sx * 280;
+      p.z = lost.z - sz * 280;
+      for (let d = 0; d <= 360; d += 40)
+        p.y = Math.max(p.y, world.height(p.x + sx * d, p.z + sz * d) + 160);
+      for (const unit of [...g.enemies, ...g.allies]) {
+        if (Math.hypot(unit.x - p.x, unit.z - p.z) < 400) p.y = Math.max(p.y, unit.y + 100);
+      }
+      g.charges.respawn--;
+      g.player = p;
+      g.shots = g.shots.filter(s => s.kind !== "enemy");
+      g.target = g.lockTarget = null;
+      g.lockProgress = targetTimer = shotTimer = recharge = rollClock = 0;
+      g.terrainWarning = steering = false;
+      g.lossReason = "";
+      lastDamage = g.time;
+      g.state = "playing";
+      sound("shield");
+      return true;
+    }
+
     function shot(kind, src, f, speed, power, life, target = null) {
       const s = {
         kind,
@@ -897,6 +975,9 @@
       shotTimer = shotTimer > 0 ? shotTimer - dt : 0;
       if (input.fire && shotTimer <= 0) {
         const sides = cannon === 3 ? [-4, 4] : [0];
+        const specialty = g.mods.specialty || 0;
+        volley++;
+        if (p.frame.id === "kestrel" && specialty && volley % (7 - specialty) === 0) sides.push(-6, 6);
         for (const offset of sides) {
           const nose = {
             x: p.x + f[0] * (p.frame.nose + 1) + Math.cos(p.yaw) * offset,
@@ -904,11 +985,13 @@
             z: p.z + f[2] * (p.frame.nose + 1) - Math.sin(p.yaw) * offset,
           };
           const frame = p.frame;
-          const power = frame.damage + (cannon ? 5 : 0) + 2 * g.mods.cannon;
-          for (const spread of frame.id === "manta" ? [-0.085, 0, 0.085] : [0]) {
+          const power = frame.damage + (cannon ? 5 : 0);
+          const arc = .085 * (1 - .15 * specialty);
+          for (const spread of frame.id === "manta" ? [-arc, 0, arc] : [0]) {
             const direction = spread ? forward({ yaw: p.yaw + spread, pitch: p.pitch }) : f;
             const round = shot("cannon", nose, direction, p.speed + frame.shotSpeed, power, 1.64);
             round.style = frame.id;
+            if (frame.id === "needle") round.pierced = new Set();
           }
         }
         const volleysPerSecond = p.frame.rate * (cannon >= 2 ? 4 / 3 : 1);
@@ -1015,7 +1098,7 @@
         const x = p.x + f[0] * 560 + Math.cos(p.yaw) * side;
         const z = p.z + f[2] * 560 - Math.sin(p.yaw) * side;
         const y = Math.max(world.height(x, z) + 45, clamp(p.y + f[1] * 360, 45, 2300));
-        const kind = rollPickup(p.shield);
+        const kind = rollPickup(100 * p.shield / p.frame.maxShield);
         g.pickup = { kind, x, y, z, expires: g.elapsed + 52 };
         notify("message", pickupHints[kind]);
       }
@@ -1036,7 +1119,7 @@
         if (!target) return;
         launchSupport(target);
       } else if (beacon.kind === "shield") {
-        p.shield = 100;
+        p.shield = p.frame.maxShield;
         sound("shield");
         notify("message", "Shield at 100%");
       } else if (beacon.kind === "rapid") {
@@ -1228,7 +1311,7 @@
         }
       } else {
         for (const e of g.enemies) {
-          if (e.hp <= 0 || e === s.pierced) continue;
+          if (e.hp <= 0 || s.pierced?.has(e)) continue;
           const t = intersect(s, dx, dy, dz, e, e.radius);
           if (t < first) {
             hit = e;
@@ -1257,8 +1340,8 @@
           }
         }
       }
-      if (hit && s.style === "needle" && !s.pierced) {
-        s.pierced = hit;
+      if (hit && s.pierced && s.pierced.size < 1 + (g.mods.specialty || 0)) {
+        s.pierced.add(hit);
         return first < 1 ? impacts(s, dt * (1 - first)) : false;
       }
       if (s.kind === "missile") {
@@ -1333,7 +1416,7 @@
       flight(dt, input);
       enemies(dt);
       checkCrash();
-      if (g.state === "dead") return;
+      if (g.state !== "playing") return;
       targeting(dt);
       g.rapidFireRemaining = Math.max(0, g.rapidFireRemaining - dt);
       updatePickup();
@@ -1404,5 +1487,5 @@
     return g;
   }
 
-  window.PatrolGame = { create, airframes };
+  window.PatrolGame = { create, airframes, tunedFrame };
 })();

@@ -6,7 +6,7 @@ Open `index.html` in a WebGL2 browser. The game runs directly from disk, includi
 
 ## Flight deck
 
-Select an aircraft on the flight deck. The selection is remembered for your next patrol. All three carry four lock-on missiles, and permanent hangar parts improve whichever aircraft you fly.
+Open the Aircraft card on the flight deck to compare the three jets. Each card shows the aircraft, its primary weapon, and flight stats with your installed parts. Your browser remembers the selected jet. All three carry four lock-on missiles.
 
 | Aircraft | Cruise | Primary weapon | Flight characteristics |
 | --- | --- | --- | --- |
@@ -30,7 +30,7 @@ On a phone, put your left thumb on the stick and drag from where it lands. Small
 
 ## Regions
 
-Choose a region and sky on the flight deck. Autumn Lake District has wooded islands and mountain lakes. Painted Mesa follows a turquoise river through terraced sandstone cliffs. Moonlight keeps each map’s terrain and adds stars, a crescent moon, cool reflections, and aircraft navigation lights. To choose another region during a run, pause, select **End**, then return to the flight deck.
+Open the Region and Sky cards on the flight deck to choose a landscape and weather. Autumn Lake District has wooded islands and mountain lakes. Painted Mesa follows a turquoise river through terraced sandstone cliffs. Moonlight keeps each map’s terrain and adds stars, a crescent moon, cool reflections, and aircraft navigation lights. Storm brings low dark clouds, windblown rain, and a steel-blue cast to either region. To choose another region during a run, pause, select **End**, then return to the flight deck.
 
 ## Patrols
 
@@ -54,7 +54,17 @@ Milestones add gear to the upgrade pool using browser-local storage. After defea
 
 Every patrol earns flight credits. Destroyed targets and completed missions add to the payout, and defeating the carrier grants a 300-credit victory bonus. Continuing into endless waves adds to that run’s earnings.
 
-Open the Hangar from the flight deck or debrief to spend credits on permanent primary weapon damage, shield recharge, or missile reload improvements. Each part has three ranks costing 40, 95, and 175 credits. Installed parts take effect at the start of each new run. Your credits and installed ranks are saved in this browser.
+Open the Hangar from the flight deck or debrief. All aircraft draw from one credit balance. Choose an aircraft tab to install parts for that jet. Engine speed, turning, maximum hull and shield, shield recharge, primary weapon damage and rate of fire, and missile reload each have three ranks costing 40, 95, and 175 credits. A signature weapon kit costs 65, 130, and 240 credits. Kestrel gains extra parallel rounds at intervals, Needle pierces additional targets, and Manta concentrates its three-shot spread.
+
+The Fleet tab sells perks for every aircraft. Each rank grants one use per patrol. Re-roll draws different upgrade cards and Banish removes one upgrade from future offers for the rest of the run. Banishing keeps previously equipped ranks and leaves your level-up choice available. Respawn offers a reserve aircraft on loss. Deploy it to continue the current mission with your upgrades, full hull, shield and missile rails, or end the patrol and collect your credits.
+
+| Fleet perk | Rank 1 | Rank 2 | Rank 3 |
+| --- | ---: | ---: | ---: |
+| Re-roll | 220 cr | 420 cr | 720 cr |
+| Banish | 280 cr | 490 cr | 820 cr |
+| Respawn | 600 cr | 1,100 cr | — |
+
+Purchases apply on the next launch and persist in this browser. Existing players keep their balance and receive their previously purchased weapon, shield generator, and rail loader ranks on all three aircraft.
 
 ## Where to extend it
 

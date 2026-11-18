@@ -1,0 +1,115 @@
+.deck-picks {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0,1fr));
+  gap: 8px;
+  margin: 0 0 17px;
+}
+.deck-picks button, .deck-option {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: #302a37;
+  color: #fff0d6;
+  border: 1px solid #80717c;
+  border-bottom: 3px solid var(--accent);
+  border-radius: 2px;
+  box-shadow: 0 3px 0 #1b1723;
+  padding: 0;
+  text-align: left;
+  overflow: hidden;
+}
+.deck-picks button:hover, .deck-option:hover {
+  background: #463b46;
+  border-color: var(--accent);
+}
+.deck-art {
+  display: grid;
+  position: relative;
+  place-items: center;
+  width: 100%;
+  aspect-ratio: 144/64;
+  overflow: hidden;
+  border-bottom: 1px solid #c9b3a33b;
+  background: #383344;
+}
+.deck-art canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; }
+.aircraft-art {
+  background-color: color-mix(in srgb, var(--accent) 12%, #252331);
+  background-image: linear-gradient(90deg,#c4ad9620 1px,transparent 1px),linear-gradient(#c4ad9620 1px,transparent 1px);
+  background-size: 14px 14px;
+}
+.deck-pick-copy {
+  width: 100%;
+  position: relative;
+  display: grid;
+  gap: 4px;
+  padding: 8px 9px;
+}
+.deck-pick-copy::after { content: "›"; position: absolute; right: 7px; top: 4px; color: var(--accent); font-size: 19px; }
+.deck-pick-copy small, .deck-kicker {
+  color: var(--accent,#f8bf8b);
+  font: 700 10px/1.25 ui-monospace, Menlo, monospace;
+  text-transform: uppercase;
+  letter-spacing: .09em;
+}
+.deck-pick-copy strong { color:#fff1d8; font-size: clamp(13px,1.25vw,16px); line-height:1.16; }
+#deckPicker {
+  box-sizing: border-box;
+  width: min(840px, calc(100vw - 32px));
+  max-width: 100%;
+  max-height: calc(100dvh - 28px);
+  overflow: auto;
+  overscroll-behavior: contain;
+  color: #fff0d6;
+  background:#292533;
+  border:1px solid #958184;
+  border-top:4px solid #f6c38a;
+  padding: clamp(15px,2.2vw,28px);
+  box-shadow: 6px 8px 0 #1a17239c;
+}
+#deckPicker::backdrop { background: #191624bb; }
+#deckPicker header {
+  display:flex; align-items: center; justify-content:space-between; gap:12px; margin-bottom:17px;
+}
+#deckPicker h2 { margin: 3px 0 0; font-size:clamp(24px,3.1vw,39px); line-height: 1.05; letter-spacing:-.035em; }
+.deck-back { padding: 8px 15px; border-radius:2px; border:1px solid #8c7777; color:#ffe8cb; background:#3e3341; font-weight:700; }
+#deckChoices { display: grid; grid-template-columns: repeat(var(--count),minmax(0,1fr)); gap:clamp(8px,1.35vw,16px); padding:5px; margin:-5px; }
+.deck-option { position:relative; }
+.deck-option[aria-pressed="true"] { border-color: var(--accent); }
+.deck-selected {
+  position:absolute; top:6px; left:6px; padding:3px 6px;
+  background:#252330; color:#f7e8cc; font:700 10px/1.1 ui-monospace,Menlo,monospace; border-left:2px solid var(--accent);
+}
+.choice-copy { display:grid; gap:4px; padding:12px 13px 14px; width:100%; }
+.choice-name { font-size: clamp(18px,2.1vw,26px); line-height:1.06; }
+.choice-weapon { color:var(--accent); font-size:14px; font-weight:700; }
+.choice-desc { font-size:14px; line-height:1.3; color:#e2d7d1; }
+.choice-stats {
+  display:grid; width:calc(100% - 26px); grid-template-columns:repeat(2,minmax(0,1fr)); column-gap:12px;
+  border-top:1px solid #605361; padding:9px 0 12px; margin:auto 13px 0;
+}
+.choice-stat { display:grid; gap:1px; margin: 3px 0; }
+.choice-stat span { font:600 10px/1.3 ui-monospace,Menlo,monospace; color:#cdbdbe; text-transform:uppercase; }
+.choice-stat b { font:700 15px/1.2 ui-monospace,Menlo,monospace; color:#ffefd2; }
+@media (max-width:600px), (max-height:450px) {
+  #deckPicker { padding: 12px; max-height: calc(100dvh - 16px); width: min(520px,calc(100vw - 16px)); }
+  #deckPicker header { position:sticky; top:-12px; z-index:1; padding:7px 0 9px; background:#292533; margin-bottom:5px; }
+  #deckPicker h2 { font-size:24px; } .deck-back { min-height:42px; }
+  #deckChoices { grid-template-columns: 1fr; gap:8px; }
+  .deck-option { display:grid; grid-template-columns: 34% 1fr; align-items:center; }
+  .deck-option .deck-art { height:100%; min-height:65px; aspect-ratio:auto; border-bottom:0; border-right:1px solid #89747770; }
+  .deck-option .deck-art canvas { object-fit:cover; }
+  .deck-option .aircraft-art canvas { object-fit:contain; }
+  .choice-copy { padding:9px; gap:3px; }
+  .choice-name {font-size:19px;} .choice-desc {font-size:12px;}
+  .choice-weapon {font-size:13px;}
+  .choice-stats { width:100%; grid-column: 1/-1; grid-template-columns:repeat(6,minmax(0,1fr)); column-gap:2px; padding:5px 7px; margin:0; background: #282430; }
+  .choice-stat span {font-size:8px;} .choice-stat b {font-size:11px;}
+  .deck-selected {top:3px;left:3px;font-size:9px;}
+}
+@media (max-width:440px) {
+  .deck-picks {gap:5px;margin-bottom:12px;}
+  .deck-pick-copy {padding:6px;gap:3px;}
+  .deck-pick-copy strong {font-size:13px;}
+  .deck-pick-copy small {font-size:9px;}
+}

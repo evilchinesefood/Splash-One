@@ -377,50 +377,124 @@ const patrol = (() => {
   const hangar = $("hangar");
   let settlement = Promise.resolve();
 
-  function refreshWallet() {
-    const credits = PatrolHangar.read().credits;
-    $("deckCredits").textContent = credits + " cr";
-    $("wallet").textContent = credits + " credits";
+  let workshopScope = "kestrel";
+  const workshops = {
+    kestrel: { title: "Multirole fighter", accent: "#a5cddb" },
+    needle: { title: "Interceptor", accent: "#8bd9d3" },
+    manta: { title: "Heavy attack wing", accent: "#ffb382" },
+    fleet: { title: "All aircraft", accent: "#d1b8f0" },
+  };
+  function refreshWallet(profile = PatrolHangar.read()) {
+    $("deckCredits").textContent = profile.credits + " cr";
+    $("wallet").textContent = profile.credits.toLocaleString("en-US");
+  }
+  function hangarHint() {
+    return PatrolHangar.sessionOnly ? "Progress is saved for this visit." : "Upgrades take effect on your next patrol.";
   }
   function renderParts() {
+    const scope = workshopScope;
+    const fleet = scope === "fleet";
+    const frame = PatrolGame.airframes[scope];
+    const catalog = fleet ? PatrolHangar.fleetParts : PatrolHangar.partsFor(scope);
     const profile = PatrolHangar.read();
-    refreshWallet();
-    $("parts").replaceChildren();
-    for (const part of PatrolHangar.parts) {
-      const rank = profile.ranks[part.id];
-      const cost = PatrolHangar.prices[rank];
-      const row = document.createElement("section");
-      row.className = "part";
-      const info = document.createElement("div");
-      const title = document.createElement("h3");
+    const ranks = fleet ? profile.fleet : profile.ships[scope];
+    refreshWallet(profile);
+    hangar.style.setProperty("--bay-accent", workshops[scope].accent);
+    for (const tab of $("workbenches").children) {
+      tab.setAttribute("aria-pressed", tab.dataset.scope === scope);
+    }
+    $("workshopClass").textContent = workshops[scope].title;
+    $("workshopName").textContent = fleet ? "Fleet upgrades" : frame.name;
+    $("workshopWeapon").textContent = fleet ? "Charges refresh each patrol." : frame.weapon;
+    const stats = $("workshopStats");
+    const tuned = fleet ? null : PatrolGame.tunedFrame(scope, ranks);
+    const readings = fleet ? [["Re-rolls", ranks.reroll], ["Banishes", ranks.banish], ["Extra lives", ranks.respawn]]
+      : [["Cruise", Math.round(tuned.cruise * 1.94384) + " kt"], ["Turn", Math.round(tuned.handling * 1.5 * 180 / Math.PI) + "°/s"],
+         ["Hull", tuned.maxHull], ["Shield", tuned.maxShield], ["Round damage", tuned.damage], ["Volleys / sec", Number(tuned.rate.toFixed(2))]];
+    stats.replaceChildren();
+    for (const [name, value] of readings) {
+      const label = document.createElement("dt"), reading = document.createElement("dd");
+      label.textContent = name;
+      reading.textContent = value;
+      stats.append(label, reading);
+    }
+    const installed = Object.values(ranks).reduce((sum, rank) => sum + rank, 0);
+    const capacity = catalog.reduce((sum, part) => sum + part.prices.length, 0);
+    $("workshopProgress").textContent = installed + " / " + capacity + " ranks installed";
+    const art = $("workshopPortrait");
+    art.replaceChildren(...(fleet ? ["kestrel", "needle", "manta"] : [scope]).map(PatrolArt.aircraftPortrait));
+    art.classList.toggle("fleet-formation", fleet);
+    const cards = [];
+    for (const part of catalog) {
+      const rank = ranks[part.id];
+      const cost = part.prices[rank];
+      const row = document.createElement("article");
+      row.className = "part" + (part.id === "specialty" ? " signature-part" : "");
+      const icon = PatrolUpgrades.icon(part.icon, 56);
+      const head = document.createElement("header");
+      const group = document.createElement("small");
+      group.textContent = part.group;
+      const title = document.createElement("h4");
       title.textContent = part.name;
+      head.append(group, title);
       const description = document.createElement("p");
       description.textContent = part.detail;
-      const level = document.createElement("small");
-      level.textContent = "Rank " + rank + " / " + PatrolHangar.prices.length;
-      info.append(title, description, level);
-      const buy = button(cost === undefined ? "Max rank" : cost + " cr", async () => {
-        buy.disabled = true;
-        const purchased = await PatrolHangar.purchase(part.id);
-        renderParts();
-        $("hangarStatus").textContent = purchased ? part.name + " installed." : "Balance or rank changed.";
-        if (PatrolHangar.sessionOnly) $("hangarStatus").textContent += " Saved for this visit.";
-        if (purchased) PatrolAudio.play("equip");
-        const next = $("parts").querySelector('[data-part="' + part.id + '"]:enabled') || hangar.querySelector('[type="submit"]');
-        next.focus({ preventScroll: true });
-      });
+      const level = document.createElement("span");
+      level.className = "part-rank";
+      level.title = "Rank " + rank + " of " + part.prices.length;
+      level.setAttribute("role", "img");
+      level.setAttribute("aria-label", level.title);
+      for (let i = 0; i < part.prices.length; i++) {
+        const pip = document.createElement("i");
+        if (i < rank) pip.className = "fitted";
+        level.append(pip);
+      }
+      const buy = document.createElement("button");
+      buy.type = "button";
       buy.dataset.part = part.id;
+      buy.textContent = cost === undefined ? "Max rank" : cost + " cr";
       buy.disabled = cost === undefined || cost > profile.credits;
       buy.setAttribute("aria-label", cost === undefined ? part.name + " at max rank" : "Upgrade " + part.name + " for " + cost + " credits");
-      row.append(PatrolUpgrades.icon(part.id), info, buy);
-      $("parts").append(row);
+      buy.onclick = async () => {
+        buy.disabled = true;
+        const purchased = await PatrolHangar.purchase(scope, part.id);
+        renderParts();
+        if (scope !== workshopScope || !hangar.open) return;
+        if (!purchased) $("hangarStatus").textContent = "Balance or rank changed.";
+        if (purchased) {
+          const current = PatrolHangar.read();
+          const rankNow = (fleet ? current.fleet : current.ships[scope])[part.id];
+          $("hangarStatus").textContent = part.name + " installed · Rank " + rankNow + (PatrolHangar.sessionOnly ? " · This visit" : "");
+          PatrolAudio.play("equip");
+        }
+        const next = $("parts").querySelector('[data-part="' + part.id + '"]:enabled') ||
+          $("workbenches").querySelector('[aria-pressed="true"]');
+        next.focus({ preventScroll: true });
+      };
+      const controls = document.createElement("div");
+      controls.className = "part-controls";
+      controls.append(level, buy);
+      row.append(icon, head, description, controls);
+      cards.push(row);
     }
+    $("parts").replaceChildren(...cards);
   }
+  $("workbenches").addEventListener("click", event => {
+    const tab = event.target.closest("[data-scope]");
+    if (!tab || workshopScope === tab.dataset.scope) return;
+    workshopScope = tab.dataset.scope;
+    renderParts();
+    $("workshopBody").scrollTop = $("parts").scrollTop = 0;
+    $("hangarStatus").textContent = hangarHint();
+  });
   async function openHangar() {
     await settlement;
-    $("hangarStatus").textContent = PatrolHangar.sessionOnly ? "Saved for this visit." : "";
+    workshopScope = g && g.state !== "title" ? g.player.frame.id : $("airframePick").value;
+    $("hangarStatus").textContent = hangarHint();
     renderParts();
     if (!hangar.open) hangar.showModal();
+    $("workshopBody").scrollTop = $("parts").scrollTop = 0;
+    $("workbenches").querySelector('[aria-pressed="true"]').focus({ preventScroll: true });
   }
   $("openHangar").onclick = openHangar;
   window.addEventListener("storage", () => {
@@ -436,22 +510,16 @@ const patrol = (() => {
     settlement = PatrolHangar.deposit(g, bill).then(refreshWallet);
   }
   const airframePick = $("airframePick");
-  for (const frame of Object.values(PatrolGame.airframes))
-    airframePick.add(new Option(frame.name, frame.id));
   try {
     const saved = localStorage.getItem("patrol.airframe");
     if (Object.hasOwn(PatrolGame.airframes, saved)) airframePick.value = saved;
   } catch { /* Keep the selection in memory when storage is unavailable. */ }
   function previewAirframe() {
     const frame = PatrolGame.airframes[airframePick.value];
-    $("airframeWeapon").textContent = frame.weapon;
     $("controlPrimary").textContent = frame.weapon.toLowerCase();
     $("touchPrimaryHint").textContent = frame.trigger;
     document.querySelector('[data-control="fire"]').textContent = frame.trigger;
-    $("airframeDetail").textContent = frame.description;
-    $("airframeStats").textContent = "Cruise " + Math.round(frame.cruise * 1.94384) + " kt  ·  Turn " +
-      Math.round(frame.handling * 1.5 * 180 / Math.PI) + "°/s  ·  Armor " + Math.round(frame.armor * 100) + "%";
-    if (g?.state === "title") g.player.frame = frame;
+    if (g?.state === "title") g.player.frame = PatrolGame.tunedFrame(frame.id, PatrolHangar.read().ships[frame.id]);
   }
   airframePick.onchange = () => {
     previewAirframe();
@@ -469,7 +537,8 @@ const patrol = (() => {
     transition = null;
     paused = false;
     unlockSound();
-    g.start(minutes, PatrolHangar.read().ranks, airframePick.value);
+    const profile = PatrolHangar.read();
+    g.start(minutes, profile.ships[airframePick.value], airframePick.value, profile.fleet);
     g.view = 0;
     carry = 0;
     lastPanel = "";
@@ -530,12 +599,47 @@ const patrol = (() => {
     $("patrolEquipment").hidden = !upgrades.length;
     $("loadout").replaceChildren(...upgrades.map(item =>
       equipmentCard(item.id, item.name, "Rank " + item.level)));
-    const parts = PatrolHangar.parts.filter(part => g.mods[part.id] > 0);
-    $("hangarEquipment").hidden = !parts.length;
-    $("installedParts").replaceChildren(...parts.map(part =>
-      equipmentCard(part.id, part.name, "Rank " + g.mods[part.id])));
+    const parts = PatrolHangar.partsFor(frame.id).filter(part => g.mods[part.id] > 0);
+    const perks = PatrolHangar.fleetParts.filter(part => g.fleet[part.id] > 0);
+    $("hangarEquipment").hidden = !parts.length && !perks.length;
+    $("installedParts").replaceChildren(
+      ...parts.map(part => equipmentCard(part.icon || part.id, part.name, "Rank " + g.mods[part.id])),
+      ...perks.map(perk => equipmentCard(perk.icon || perk.id, perk.name, "Fleet · " + g.charges[perk.id] + " left")),
+    );
     $("pauseDetails").scrollTop = 0;
   }
+  function renderDraft(detail, banishing = false, celebrate = true) {
+    const tools = $("draftTools"), actions = $("actions");
+    const reroll = $("reroll"), banish = $("banish");
+    const hasGear = g.choices.some(choice => choice.id !== "service");
+    tools.hidden = !(g.fleet.reroll || g.fleet.banish);
+    reroll.hidden = !g.fleet.reroll;
+    reroll.disabled = !g.canReroll;
+    reroll.textContent = "Re-roll · " + g.charges.reroll;
+    reroll.title = g.canReroll ? "Draw a different set of upgrades" :
+      g.charges.reroll ? "All remaining upgrades are already shown" : "No re-rolls left this patrol";
+    banish.hidden = !g.fleet.banish;
+    banish.disabled = !hasGear || !g.charges.banish;
+    banish.setAttribute("aria-pressed", banishing);
+    banish.textContent = banishing ? "Cancel banish" : "Banish · " + g.charges.banish;
+    banish.title = "Remove a choice from future offers this patrol";
+    const redraw = (mode) => {
+      renderDraft(detail, mode, false);
+      actions.firstElementChild?.focus({ preventScroll: true });
+    };
+    reroll.onclick = () => { if (g.reroll()) redraw(false); };
+    banish.onclick = () => redraw(!banishing);
+    $("modalText").textContent = banishing ? "Pick an upgrade to banish for this patrol. Then choose your upgrade." : detail;
+    PatrolUpgrades.show(actions, g.choices, id => {
+      if (banishing) {
+        if (g.banish(id)) redraw(false);
+      } else if (g.choose(id)) {
+        PatrolAudio.play("equip");
+        sync();
+      }
+    }, { banishing, celebrate });
+  }
+
   function sync() {
     const state = g.state,
       home = state === "title",
@@ -560,6 +664,8 @@ const patrol = (() => {
       $("missionTitle").textContent = g.missionTitle || "";
       $("objective").textContent = g.objective || "";
       $("bonus").textContent = g.bonus ? "Bonus · " + g.bonus : "";
+      $("shield").max = p.frame.maxShield;
+      $("hull").max = p.frame.maxHull;
       $("shield").value = p.shield;
       $("hull").value = p.hull;
     }
@@ -583,6 +689,7 @@ const patrol = (() => {
     const actions = $("actions");
     actions.replaceChildren();
     let title, detail, kicker;
+    $("draftTools").hidden = true;
     if (phase === "draft") {
       const rank = pilotLevel();
       kicker = "Wave " + g.wave + (g.midwaveDraft ? " · " + g.missionTitle : " complete");
@@ -590,11 +697,19 @@ const patrol = (() => {
       title = "Upgrade your jet";
       detail = g.midwaveDraft ? "Choose an upgrade to resume this mission." :
         g.lastReward || "Choose one upgrade for the next wave.";
-      PatrolUpgrades.show(actions, g.choices, (id) => {
-        if (!g.choose(id)) return;
-        PatrolAudio.play("equip");
+      renderDraft(detail);
+    } else if (phase === "downed") {
+      kicker = g.lossReason + " · Wave " + g.wave;
+      title = "Reserve aircraft ready";
+      detail = g.charges.respawn + (g.charges.respawn === 1 ? " reserve remains. " : " reserves remain. ") +
+        "Rejoin this mission with full hull, shield and missiles. Your upgrades stay aboard.";
+      actions.append(button("Respawn", () => {
+        if (!g.respawn()) return;
+        clearInput();
+        carry = 0;
+        transition = null;
         sync();
-      });
+      }, null, true), button("End patrol", () => { g.finish(); sync(); }));
     } else if (phase === "paused") {
       kicker = "Wave " + g.wave + " · " + g.missionTitle;
       title = "Paused";
@@ -818,22 +933,17 @@ const patrol = (() => {
     }
     requestAnimationFrame(frame);
   }
-  const regions = {
-    lake: {
-      name: "Autumn Lake District",
-      intro: "Fly among island forests and mountain lakes.",
-      day: "Golden hour",
-    },
-    mesa: { name: "Painted Mesa", intro: "Follow the river between red sandstone mesas.", day: "Daylight" },
-  };
+  const deck = PatrolDeck.create();
+  hangar.addEventListener("close", previewAirframe);
   function updateSky() {
     const id = world?.mapId || $("regionPick").value;
-    const night = $("lightPick").value === "night";
-    world?.setNight(night);
-    $("lightPick").options[0].textContent = regions[id].day;
-    $("regionName").textContent = regions[id].name.toUpperCase() + (night ? " · NIGHT" : "");
-    $("regionIntro").textContent = regions[id].intro;
-    document.title = "Patrol — " + regions[id].name + (night ? " by Night" : "");
+    const region = PatrolDeck.regions[id];
+    const mode = $("lightPick").value;
+    world?.setSky(mode);
+    const suffix = mode === "night" ? " · NIGHT" : mode === "storm" ? " · STORM" : "";
+    $("regionName").textContent = region.name.toUpperCase() + suffix;
+    $("regionIntro").textContent = region.description;
+    document.title = "Patrol — " + region.name + suffix;
   }
   async function loadMap() {
     if (loadingMap || (g && g.state !== "title")) return;
@@ -863,6 +973,7 @@ const patrol = (() => {
     } catch (err) {
       console.error(err);
       if (world) $("regionPick").value = world.mapId;
+      deck.refresh();
       toast(err.message || "Unable to load the terrain.");
     } finally {
       loadingMap = false;

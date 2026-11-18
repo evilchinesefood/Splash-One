@@ -681,52 +681,6 @@ body.cockpit #meters {
     monospace;
 }
 
-.route-settings {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin: 0 0 14px;
-}
-.deck-setting {
-  display: grid;
-  gap: 7px;
-  font:
-    bold 11px ui-monospace,
-    Menlo,
-    monospace;
-  text-transform: uppercase;
-  letter-spacing: 0.14em;
-}
-.deck-setting select {
-  font:
-    600 12px ui-monospace,
-    Menlo,
-    monospace;
-  color: #ffebc7;
-  background: #302734;
-  border: 1px solid var(--line);
-  padding: 8px 7px;
-  cursor: pointer;
-}
-.deck-setting select:focus-visible {
-  outline: 2px solid var(--peach);
-}
-.deck-setting select:disabled {
-  opacity: 0.75;
-  cursor: progress;
-}
-@media (max-height: 550px) {
-  .route-settings {
-    margin-bottom: 7px;
-  }
-  .deck-setting {
-    grid-auto-flow: column;
-    align-items: center;
-  }
-  .deck-setting select {
-    padding: 4px;
-  }
-}
 @media (orientation: portrait) and (max-height: 740px) {
   #home {
     top: 48%;
@@ -736,7 +690,7 @@ body.cockpit #meters {
 /* Native menus can scroll; only the active flight surface traps drags. */
 .touch-active :is(#viewName, #pause),
 .touch-active :is(.duration, .pause-tools) button,
-.touch-active :is(.deck-setting select, #launch, .action) {
+.touch-active :is(.deck-picks button, #launch, .action) {
   min-height: 44px;
   min-width: 44px;
 }
@@ -809,7 +763,7 @@ body.cockpit #meters {
 }
 
 .deck-actions { display: flex; align-items: stretch; gap: 8px; flex-wrap: wrap; }
-.hangar-link, .part .action {
+.hangar-link {
   border: 1px solid #967b79; background: #37303c; color: var(--paper);
   padding: 8px 14px; font-weight: 700;
 }
@@ -821,53 +775,120 @@ body.cockpit #meters {
 #earnedTotal { color: #ffcf91; font-size: 18px; }
 #earnedBreakdown { font-size: 13px; color: #f7e8d7; line-height: 1.4; }
 #hangar {
-  width: min(565px, calc(100% - 24px)); max-height: 92dvh; overflow: hidden;
-  background: #2d2733; color: var(--paper); box-sizing: border-box;
-  border: 1px solid #b29486; border-top: 4px solid var(--peach);
-  padding: clamp(14px, 3vw, 28px);
+  --bay-accent: #a5cddb;
+  width: min(920px, calc(100% - 32px)); max-width: none; max-height: min(800px, 92dvh);
+  padding: 0; margin: auto; overflow: hidden; color: #fff0d9; background: #282532;
+  border: 1px solid #867680; border-top: 4px solid var(--peach);
+  box-shadow: 0 20px 80px #15101ed9;
 }
-#hangar::backdrop { background: #171421c9; }
+#hangar::backdrop { background: #171421cf; }
 #hangar[open] { display: flex; flex-direction: column; }
-.hangar-heading, .part { display: flex; gap: 12px; align-items: center; }
-.hangar-heading { justify-content: space-between; }
-.hangar-heading h2 { margin: 0; }
-#wallet { color: #ffe1a6; font: bold 15px ui-monospace, monospace; }
-#hangar > p { margin: 10px 0 15px; line-height: 1.4; }
-#parts { display: grid; gap: 8px; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
-.part { background: #39313e; padding: 10px 12px; border: 1px solid #6b5965; }
-.part canvas { width: 64px; height: auto; image-rendering: pixelated; }
-.part h3 { margin: 0; font-size: 17px; }
-.part p { margin: 3px 0; line-height: 1.35; font-size: 14px; }
-.part small { color: #ffcf91; }
-.part .action { margin-left: auto; min-width: 74px; min-height: 44px; text-align: center; white-space: nowrap; }
-.part .action:enabled { color: #312932; background: #ffba86; }
-.part .action:disabled { opacity: .7; cursor: default; }
-#hangar form { display: flex; justify-content: end; }
-#hangar form button { min-width: 90px; text-align: center; }
-#hangarStatus:empty { display: none; }
-#hangarStatus { color: #ffcf91; }
-#parts + #hangarStatus:empty + form { margin-top: 12px; }
-@media (max-width: 440px) {
-  .part { gap: 8px; padding: 9px; }
-  .part canvas { display: none; }
+.hangar-heading, .hangar-footer { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.hangar-heading { padding: 16px 22px 12px; }
+.hangar-heading h2 { margin: 0; font-size: clamp(25px, 4vw, 40px); line-height: 1; }
+.hangar-wallet { display: grid; justify-items: end; }
+.hangar-wallet span, .workshop-ident > p:first-child, .part header small {
+  font: 700 10px/1.35 ui-monospace, Menlo, monospace; letter-spacing: .09em; text-transform: uppercase;
+}
+.hangar-wallet span { color: #d2bba9; }
+#wallet { font: 800 20px/1.3 ui-monospace, Menlo, monospace; color: #ffd08b; }
+#workbenches {
+  display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 5px;
+  padding: 0 22px 12px; border-bottom: 1px solid #695a6a;
+}
+#workbenches button {
+  padding: 8px 3px; min-height: 40px; background: #302b39; color: #e8d9cf; border: 1px solid #695e70;
+  font-size: 15px; font-weight: 750;
+}
+#workbenches button[data-scope="fleet"] { border-color: #8c799c; color: #ebd9f7; }
+#workbenches button[aria-pressed="true"] { color: #221f2c; background: var(--bay-accent); border-color: var(--bay-accent); }
+#workshopBody {
+  display: grid; grid-template-columns: minmax(170px, .85fr) minmax(0, 2.6fr); min-height: 0;
+}
+.workshop-board { min-width: 0; background: #211f2c; border-right: 1px solid #584d5c; padding: 22px 14px; }
+#workshopPortrait {
+  position: relative; isolation: isolate; width: 100%; aspect-ratio: 1.7; display: grid; place-items: center;
+  border: 1px solid #554e61; background-color: #242534;
+  background-image: linear-gradient(#c1d6d00a 1px, transparent 1px), linear-gradient(90deg, #c1d6d00a 1px, transparent 1px);
+  background-size: 14px 14px;
+}
+#workshopPortrait canvas { display: block; width: 100%; height: auto; image-rendering: pixelated; }
+#workshopPortrait.fleet-formation canvas { position: absolute; width: 57%; }
+.fleet-formation canvas:nth-child(1) { top: 42%; left: 1%; }
+.fleet-formation canvas:nth-child(2) { top: 4%; left: 23%; }
+.fleet-formation canvas:nth-child(3) { top: 40%; right: 0; }
+.workshop-ident { padding: 15px 2px; }
+.workshop-ident p, .workshop-ident h3 { margin: 0; }
+.workshop-ident > p:first-child { color: var(--bay-accent); }
+.workshop-ident h3 { font-size: clamp(21px, 2.4vw, 33px); line-height: 1.15; margin: 4px 0; }
+#workshopWeapon { color: #ded4d4; font-size: 14px; line-height: 1.3; }
+#workshopProgress { display: inline-block; margin-top: 16px; border-top: 1px solid #584e60; padding-top: 9px; color: #c9bdcb; font: 600 12px/1.4 ui-monospace, monospace; }
+#workshopStats {
+  display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 7px 5px; margin: 0;
+  border-top: 1px solid #584e60; padding: 12px 2px; font-size: 13px;
+}
+#workshopStats dt { color: #ddd0d6; }
+#workshopStats dd { margin: 0; text-align: right; color: var(--bay-accent); font: 700 13px/1.4 ui-monospace, monospace; }
+#parts {
+  min-height: 0; display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; align-content: start;
+  padding: 14px; overflow: auto; overscroll-behavior: contain; scrollbar-color: #877583 #332c39;
+}
+.part {
+  display: grid; grid-template-columns: 46px minmax(0,1fr); grid-template-rows: auto 1fr auto; align-content: start;
+  gap: 8px 10px; padding: 12px; background: #35303d; border: 1px solid #5f5364;
+}
+.signature-part { border-color: var(--bay-accent); }
+.part canvas { width: 46px; height: 40px; object-fit: contain; align-self: center; image-rendering: pixelated; }
+.part header { align-self: center; }
+.part header small { display: block; color: var(--bay-accent); }
+.part h4 { margin: 2px 0 0; font-size: 17px; line-height: 1.1; }
+.part p { grid-column: 1/-1; margin: 0; font-size: 14px; line-height: 1.35; color: #e8dcd5; }
+.part-controls { grid-column: 1/-1; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.part-rank { display: inline-flex; gap: 3px; }
+.part-rank i { width: 12px; height: 5px; background: #272330; border: 1px solid #978495; }
+.part-rank i.fitted { border-color: var(--bay-accent); background: var(--bay-accent); }
+.part-controls button {
+  min-height: 34px; min-width: 74px; padding: 5px 10px; border: 1px solid #ffc693; background: #f6ac75; color: #29212b;
+  font: 750 13px/1.2 ui-monospace, Menlo, monospace;
+}
+.part-controls button:disabled { border-color: #706172; background: #3a3342; color: #c4b7c3; cursor: default; }
+.hangar-footer { padding: 10px 18px; background: #2c2734; border-top: 1px solid #6b5968; }
+#hangarStatus { margin: 0; font-size: 13px; line-height: 1.25; color: #f5dcc3; }
+.hangar-footer form { margin: 0; }
+.hangar-footer button { min-width: 84px; min-height: 38px; padding: 6px 12px; text-align: center; }
+@media (max-width: 680px) {
+  #hangar { width: calc(100% - 14px); max-height: calc(100dvh - 14px); }
+  .hangar-heading { padding: 12px 12px 8px; }
+  #workbenches { padding: 0 10px 8px; }
+  #workshopBody { display: block; overflow: auto; overscroll-behavior: contain; }
+  .workshop-board { display: grid; grid-template-columns: 84px minmax(0,1fr); align-items: center; gap: 7px 11px; padding: 9px 12px; border: 0; border-bottom: 1px solid #584d5c; }
+  #workshopStats { grid-column: 1/-1; grid-template-columns: 1fr auto 1fr auto; gap: 3px 8px; padding: 6px 0 0; font-size: 12px; }
+  #workshopStats dt:nth-of-type(even) { padding-left: 5px; }
+  #workshopStats dd { font-size: 12px; }
+  .workshop-board:has(.fleet-formation) #workshopStats { grid-template-columns: 1fr auto 1fr auto 1fr auto; }
+  .workshop-ident { padding: 0; }
+  .workshop-ident h3 { margin: 1px 0; }
+  #workshopProgress { margin: 2px 0 0; padding: 0; border: none; font-size: 11px; }
+  #parts { overflow: visible; padding: 9px; gap: 7px; }
+  .hangar-footer { padding: 6px 10px; }
+}
+@media (max-width: 460px) {
+  #parts { grid-template-columns: 1fr; }
+  #workbenches button { font-size: 14px; }
+  .part { grid-template-columns: 44px minmax(0,1fr) auto; grid-template-rows: auto auto; gap: 6px 9px; padding: 10px; }
+  .part p { grid-row: 2; }
+  .part-controls { grid-column: 3; grid-row: 1; flex-direction: column-reverse; gap: 5px; }
+  .part-controls button { min-height: 36px; min-width: 58px; padding: 5px; }
   .deck-actions #launch { min-width: 150px; }
 }
-
-.airframe-settings {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 7px 16px;
-  align-items: center;
-  padding: 10px 12px;
-  margin: 0 0 14px;
-  background: #24212fdf;
-  border-left: 3px solid #ffc488;
+@media (max-height: 430px) {
+  .hangar-heading { padding: 6px 12px; }
+  .hangar-heading h2 { font-size: 25px; }
+  .hangar-wallet { display: flex; align-items: center; gap: 8px; }
+  #workbenches { padding-bottom: 6px; }
+  #workbenches button { min-height: 34px; padding: 4px; }
 }
-#airframeSummary { display: grid; gap: 2px; font-size: 14px; line-height: 1.25; }
-#airframeSummary strong { color: #ffe6ba; }
-#airframeStats { grid-column: 1/-1; color: #ecd8c3; font: 600 12px/1.4 ui-monospace, Menlo, monospace; }
-@media (max-height: 550px) {
-  .airframe-settings { padding: 5px 9px; gap: 2px 10px; margin-bottom: 6px; }
-  #airframeSummary { font-size: 12px; }
-  #airframeStats { font-size: 11px; }
+@media (hover:hover) {
+  #workbenches button:not([aria-pressed="true"]):hover, .hangar-footer .action:hover { background: #46404b; }
+  .part-controls button:enabled:hover { background: #ffcd97; }
 }

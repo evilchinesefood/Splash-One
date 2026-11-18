@@ -1,30 +1,62 @@
 /* The career balance and installed parts share one save so spending and installation stay together. */
 window.PatrolHangar = (() => {
-  const key = "patrol.career.v1";
+  const legacyKey = "patrol.career.v1";
+  const key = "patrol.career.v2";
   const prices = [40, 95, 175];
-  const parts = [
-    { id: "cannon", name: "Cannon feed", detail: "+2 damage per cannon round per rank." },
-    { id: "shield", name: "Shield generator", detail: "+2 shield points per second while recharging per rank." },
-    { id: "missiles", name: "Rail loader", detail: "Missiles reload 0.25 seconds faster per rank." },
+  const equipment = [
+    { id: "cannon", name: "Weapon tuning", icon: "cannon", group: "Weapons", detail: "+2 damage per primary round per rank." },
+    { id: "rate", name: "Trigger cycle", icon: "salvo", group: "Weapons", detail: "+6% primary fire rate per rank." },
+    { id: "missiles", name: "Rail loader", icon: "missiles", group: "Weapons", detail: "Reload missiles 0.25 seconds faster per rank." },
+    { id: "speed", name: "Engine tuning", icon: "comet", group: "Flight", detail: "+5% cruise and boost speed per rank." },
+    { id: "turn", name: "Control surfaces", icon: "wisps", group: "Flight", detail: "+6% turn rate per rank." },
+    { id: "hull", name: "Hull reinforcement", icon: "service", group: "Protection", detail: "+12 maximum hull per rank." },
+    { id: "capacity", name: "Shield bank", icon: "guard", group: "Protection", detail: "+12 maximum shield per rank." },
+    { id: "shield", name: "Shield generator", icon: "shield", group: "Protection", detail: "+2 shield points per second while recharging per rank." },
   ];
-  const emptyCareer = () => ({ credits: 0, ranks: { cannon: 0, shield: 0, missiles: 0 } });
-  let career = emptyCareer();
+  const weaponKits = {
+    kestrel: { name: "Linked barrels", icon: "cannon", detail: "Add two parallel rounds every sixth volley. Higher ranks trigger every fifth and fourth volley." },
+    needle: { name: "Piercing core", icon: "arc", detail: "Each ion bolt can pass through one additional target per rank." },
+    manta: { name: "Scatter choke", icon: "salvo", detail: "Tighten your three-round spread by 15% per rank to land more hits at range." },
+  };
+  const shipParts = Object.fromEntries(Object.entries(weaponKits).map(([id, kit]) => [id, [
+    { ...kit, id: "specialty", group: "Signature weapon", prices: [65, 130, 240] },
+    ...equipment.map(part => ({ ...part, prices })),
+  ]]));
+  const fleetParts = [
+    { id: "reroll", name: "Re-roll", icon: "link", group: "Draft", prices: [220, 420, 720],
+      detail: "Draw a fresh set of upgrade choices. Gain one use per patrol for each rank." },
+    { id: "banish", name: "Banish", icon: "tail", group: "Draft", prices: [280, 490, 820],
+      detail: "Remove an upgrade from this patrol’s draft pool. Gain one use per patrol for each rank." },
+    { id: "respawn", name: "Respawn", icon: "siphon", group: "Recovery", prices: [600, 1100],
+      detail: "Return to the fight after losing your aircraft. Gain one extra life per patrol for each rank." },
+  ];
+  function partsFor(scope) {
+    return Object.hasOwn(shipParts, scope) ? shipParts[scope] : [];
+  }
+  function ranksFor(catalog, source) {
+    return Object.fromEntries(catalog.map(({ id, prices }) => {
+      const value = source?.[id];
+      return [id, Number.isInteger(value) ? Math.min(prices.length, Math.max(0, value)) : 0];
+    }));
+  }
+  function restore(saved, legacy = false) {
+    const ships = Object.fromEntries(Object.entries(shipParts).map(([id, catalog]) => {
+      // The three original parts were fleet-wide. Every airframe inherits those paid ranks.
+      const shared = legacy ? { cannon: saved?.ranks?.cannon, shield: saved?.ranks?.shield, missiles: saved?.ranks?.missiles } : null;
+      return [id, ranksFor(catalog, shared || saved?.ships?.[id])];
+    }));
+    return { version: 2, credits: Number.isSafeInteger(saved?.credits) && saved.credits >= 0 ? saved.credits : 0,
+      ships, fleet: ranksFor(fleetParts, saved?.fleet) };
+  }
+  let career = restore(null);
   let sessionOnly = false;
 
   function read() {
     if (!sessionOnly) {
       try {
-        const saved = JSON.parse(localStorage.getItem(key));
-        if (saved === null) career = emptyCareer();
-        else if (Number.isSafeInteger(saved.credits) && saved.credits >= 0) {
-          const ranks = {};
-          for (const { id } of parts) {
-            const rank = saved.ranks?.[id];
-            ranks[id] = Number.isInteger(rank) ? Math.max(0, Math.min(prices.length, rank)) : 0;
-          }
-          career = { credits: saved.credits, ranks };
-        }
-      } catch { /* A missing or unreadable save leaves the current career available. */ }
+        const current = localStorage.getItem(key);
+        career = current === null ? restore(JSON.parse(localStorage.getItem(legacyKey)), true) : restore(JSON.parse(current));
+      } catch { /* Keep the in-memory career if storage is unavailable. */ }
     }
     return career;
   }
@@ -41,12 +73,18 @@ window.PatrolHangar = (() => {
     if (navigator.locks) return navigator.locks.request(key, () => change(read()));
     return Promise.resolve(change(read()));
   }
-  function purchase(id) {
+  function purchase(scope, id) {
     return transact(profile => {
-      const rank = profile.ranks[id];
-      const price = prices[rank];
-      if (!parts.some(part => part.id === id) || price === undefined || price > profile.credits) return false;
-      save({ credits: profile.credits - price, ranks: { ...profile.ranks, [id]: rank + 1 } });
+      const fleet = scope === "fleet";
+      const part = (fleet ? fleetParts : partsFor(scope)).find(item => item.id === id);
+      if (!part) return false;
+      const ranks = fleet ? profile.fleet : profile.ships[scope];
+      const rank = ranks[id];
+      const cost = part.prices[rank];
+      if (cost === undefined || cost > profile.credits) return false;
+      const upgraded = { ...ranks, [id]: rank + 1 };
+      const installation = fleet ? { fleet: upgraded } : { ships: { ...profile.ships, [scope]: upgraded } };
+      save({ ...profile, ...installation, credits: profile.credits - cost });
       return true;
     });
   }
@@ -67,5 +105,5 @@ window.PatrolHangar = (() => {
       }
     });
   }
-  return { read, purchase, deposit, statement, parts, prices, get sessionOnly() { return sessionOnly; } };
+  return { read, purchase, deposit, statement, partsFor, fleetParts, get sessionOnly() { return sessionOnly; } };
 })();

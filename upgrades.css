@@ -165,3 +165,22 @@
   .upgrade-draft .gear-name { font-size: 18px; margin-block: 3px; }
   .upgrade-draft .gear-detail { font-size: 12px; }
 }
+
+#draftTools {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+#draftTools[hidden], #draftTools button[hidden] { display: none; }
+#draftTools button {
+  min-height: 40px;
+  padding: 6px 18px;
+  color: #ffe7bd;
+  border: 1px solid #9b8270;
+  background: #352f3c;
+}
+#draftTools button[aria-pressed="true"], .upgrade-card.banish-choice .gear-level { color: #ffb09a; }
+#draftTools button[aria-pressed="true"] { border-color: #ffb09a; background: #573837; }
+#draftTools button:disabled { opacity: .5; }

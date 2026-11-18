@@ -1344,7 +1344,7 @@
     tape(cx - atX, Math.round(e.speed * 1.94384), "KTS", (e.gForce || 1).toFixed(1) + " G");
     tape(cx + atX, Math.round(e.y * 3.28084), "FT", "R " + Math.round(agl * 3.28084));
     cockpitPlate(ctx, "MSL " + e.missiles, cx, cy + h * 0.12, col);
-    const warning = g.terrainWarning ? "PULL UP" : e.hull < 40 ? "HULL" : e.shield < 20 ? "SHIELD" : "";
+    const warning = g.terrainWarning ? "PULL UP" : e.hull < e.frame.maxHull * .40 ? "HULL" : e.shield < e.frame.maxShield * .20 ? "SHIELD" : "";
     if (warning && Math.sin(g.time * 9) > -0.25) cockpitPlate(ctx, warning, cx, cy - h * 0.1, "#ffd59d");
   }
 
@@ -1631,8 +1631,8 @@
     c.fillRect(365, 42, 28, 11);
     caption(clock, 379, 47, amber, true);
     const lamps = [
-      ["SHD", e.shield < 20],
-      ["HUL", e.hull < 40],
+      ["SHD", e.shield < e.frame.maxShield * .20],
+      ["HUL", e.hull < e.frame.maxHull * .40],
       ["AB", e.boost],
     ];
     lamps.forEach(([text, on], j) => {
@@ -1746,8 +1746,8 @@
     ctx.fillRect(left - 1, top - 1, readoutWidth + 2, 19);
     ctx.fillStyle = "#202d37";
     ctx.fillRect(left, top, readoutWidth, 17);
-    const readouts = [["SHIELD", e.shield, "#8dd7da"], ["HULL", e.hull, "#f7b181"]];
-    readouts.forEach(([name, value, color], i) => {
+    const readouts = [["SHIELD", e.shield, e.frame.maxShield, "#8dd7da"], ["HULL", e.hull, e.frame.maxHull, "#f7b181"]];
+    readouts.forEach(([name, value, maximum, color], i) => {
       const width = Math.floor(readoutWidth / 2) - 8, x = left + 4 + i * Math.floor(readoutWidth / 2);
       const caption = width < 55 ? (i === 0 ? "SHD" : "HUL") : name;
       cockpitType(ctx, caption, x, top + 2, "#e9f0df", "left");
@@ -1755,7 +1755,7 @@
       ctx.fillStyle = "#48535b";
       ctx.fillRect(x, top + 11, width, 4);
       ctx.fillStyle = color;
-      ctx.fillRect(x, top + 11, Math.round(width * saturate(value / 100)), 4);
+      ctx.fillRect(x, top + 11, Math.round(width * saturate(value / maximum)), 4);
     });
   }
 
@@ -1769,6 +1769,39 @@
     ctx.translate(x, y);
   }
 
+  // Repeat a seeded volume in world space so the rain follows the bank and camera changes.
+  const rainSpan = 112;
+  const rainDrops = (() => {
+    let seed = 1601;
+    function coordinate() {
+      seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+      return seed * (rainSpan / 4294967296);
+    }
+    return Array.from({length: 780}, () => [coordinate(), coordinate(), coordinate()]);
+  })();
+  function drawRain(ctx, g, cam, project, forward) {
+    const wrap = v => v - rainSpan * Math.floor(v / rainSpan + .5);
+    const time = g.time, speed = g.player.speed;
+    const w = ctx.canvas.width, h = ctx.canvas.height;
+    const tailX = (speed * forward[0] - 11) * .014;
+    const tailY = (speed * forward[1] + 45) * .014;
+    const tailZ = (speed * forward[2] - 3) * .014;
+    for (const drop of rainDrops) {
+      const x = cam.x + wrap(drop[0] + time * 11 - cam.x);
+      const y = cam.y + wrap(drop[1] - time * 45 - cam.y);
+      const z = cam.z + wrap(drop[2] + time * 3 - cam.z);
+      const p = project(x, y, z);
+      if (!p || p.d < 6 || p.x < -5 || p.x > w + 5 || p.y < -5 || p.y > h + 5) continue;
+      const tail = project(x + tailX, y + tailY, z + tailZ);
+      if (!tail) continue;
+      const dx = tail.x - p.x, dy = tail.y - p.y;
+      const scale = Math.min(1, 8 / (Math.max(Math.abs(dx), Math.abs(dy)) || 1));
+      ctx.globalAlpha = p.d < 23 ? .62 : .33;
+      line(ctx, p.x, p.y, p.x + dx * scale, p.y + dy * scale, "#c0d1da");
+    }
+    ctx.globalAlpha = 1;
+  }
+
   function draw(ctx, g, cam, project) {
     const w = ctx.canvas.width,
       h = ctx.canvas.height,
@@ -1780,7 +1813,7 @@
     const trail = trailState(g, b),
       blend = g.cockpitBlend || 0;
     const inScreen = (a, margin) => a && a.x > -margin && a.x < w + margin && a.y > -margin && a.y < h + margin;
-    shadow(ctx, g, b, project);
+    if (p.hull > 0) shadow(ctx, g, b, project);
     drawTrails(ctx, g, trail, project);
     const objects = [];
     for (const e of g.enemies) {
@@ -1808,7 +1841,7 @@
       if (inScreen(a, 65) && visible(g, cam, e)) objects.push({ type: "pickup", e, a, d: a.d });
     }
     const pp = project(p.x, p.y, p.z);
-    if (pp && blend < 0.52 && g.state !== "dead") objects.push({ type: "player", e: p, a: pp, d: pp.d });
+    if (pp && blend < 0.52 && p.hull > 0) objects.push({ type: "player", e: p, a: pp, d: pp.d });
     objects.sort((a, b) => b.d - a.d);
     for (const { type, e, a } of objects) {
       if (type === "pickup") {
@@ -1846,7 +1879,7 @@
         ctx.globalAlpha = 1 - saturate((blend - 0.12) / 0.4);
         const model = playerModels[e.frame.id];
         drawMesh(ctx, e, model.mesh.concat(exhaustMesh(model.nozzle, g.time, e.boost)), b, project, e.missiles, g.world.night);
-        if (g.world.night) nightLights(ctx,e,b,project,g.time);
+        if (g.world.night || g.world.storm) nightLights(ctx,e,b,project,g.time);
         ctx.restore();
         continue;
       }
@@ -1876,8 +1909,9 @@
         mesh = mesh.concat(exhaustMesh(carrier ? carrierNozzle : jetNozzle, g.time, false));
       drawMesh(ctx, base, mesh, eb, project, 0, g.world.night);
       if (e.kind === "prism") prismCharge(ctx,e,project);
-      if (g.world.night && !ground && !e.boat) nightLights(ctx,e,eb,project,g.time);
+      if ((g.world.night || g.world.storm) && !ground && !e.boat) nightLights(ctx,e,eb,project,g.time);
     }
+    if (g.world.storm) drawRain(ctx, g, cam, project, b.f);
     if (g.state !== "title") {
       if (blend > 0.04) {
         ctx.globalAlpha = blend;
@@ -1920,5 +1954,18 @@
     }
     ctx.restore();
   }
-  window.PatrolArt = { draw };
+  function aircraftPortrait(id) {
+    const canvas = document.createElement("canvas");
+    canvas.width = 144;
+    canvas.height = 64;
+    canvas.setAttribute("aria-hidden", "true");
+    const ctx = canvas.getContext("2d");
+    const model = playerModels[id];
+    const plane = {x: 0, y: 0, z: 0, yaw: 1.05};
+    const scale = id === "manta" ? 2.9 : 3.65;
+    const project = (x,y,z) => ({x: 72 + x * scale, y: 32 - (y * .71 + z * .70) * scale, d: z * .71 - y * .70});
+    drawMesh(ctx, plane, model.mesh, basis(plane), project, 4, false);
+    return canvas;
+  }
+  window.PatrolArt = { draw, aircraftPortrait };
 })();

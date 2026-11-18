@@ -9,12 +9,14 @@
     <title>Patrol — Autumn Lake District</title>
     <link rel="stylesheet" href="patrol.css" />
     <link rel="stylesheet" href="upgrades.css" />
+    <link rel="stylesheet" href="deck.css" />
     <script defer src="world.js"></script>
     <script defer src="game.js"></script>
     <script defer src="art.js"></script>
     <script defer src="audio.js"></script>
     <script defer src="upgrades.js"></script>
     <script defer src="hangar.js"></script>
+    <script defer src="deck.js"></script>
     <script defer src="main.js"></script>
   </head>
   <body>
@@ -30,31 +32,10 @@
           <span id="regionIntro">Fly among island forests and mountain lakes.</span><br />Build your jet for the
           carrier showdown.
         </p>
-        <div class="airframe-settings">
-          <label class="deck-setting" for="airframePick">Aircraft
-            <select id="airframePick" aria-describedby="airframeSummary"></select>
-          </label>
-          <div id="airframeSummary" aria-live="polite">
-            <strong id="airframeWeapon"></strong>
-            <span id="airframeDetail"></span>
-          </div>
-          <div id="airframeStats"></div>
-        </div>
-        <div class="route-settings">
-          <label class="deck-setting" for="regionPick"
-            >Region
-            <select id="regionPick">
-              <option value="lake">Autumn Lake District</option>
-              <option value="mesa">Painted Mesa</option>
-            </select>
-          </label>
-          <label class="deck-setting" for="lightPick"
-            >Sky
-            <select id="lightPick">
-              <option value="day">Golden hour</option>
-              <option value="night">Moonlight</option>
-            </select>
-          </label>
+        <div class="deck-picks" role="group" aria-label="Patrol setup">
+          <button type="button" id="airframePick" value="kestrel" aria-haspopup="dialog">Aircraft</button>
+          <button type="button" id="regionPick" value="lake" aria-haspopup="dialog">Region</button>
+          <button type="button" id="lightPick" value="day" aria-haspopup="dialog">Sky</button>
         </div>
         <div class="duration" aria-label="Patrol length">
           <span>Patrol length</span>
@@ -71,6 +52,12 @@
           <button id="openHangar" type="button" class="hangar-link" disabled>Hangar <span id="deckCredits">0 cr</span></button>
         </div>
       </section>
+      <dialog id="deckPicker" aria-labelledby="deckPickerTitle">
+        <header><div><span class="deck-kicker">Flight deck</span><h2 id="deckPickerTitle"></h2></div>
+          <form method="dialog"><button type="submit" class="deck-back" aria-label="Back to flight deck">Back</button></form>
+        </header>
+        <div id="deckChoices"></div>
+      </dialog>
       <div id="flight" hidden>
         <div id="mission">
           <div id="wave"></div>
@@ -190,17 +177,38 @@
             <strong id="earnedTotal"></strong><span id="earnedBreakdown"></span>
           </div>
           <div id="actions"></div>
+          <div id="draftTools" aria-label="Fleet perks" hidden>
+            <button type="button" id="reroll">Re-roll</button>
+            <button type="button" id="banish" aria-pressed="false">Banish</button>
+          </div>
         </div>
       </section>
       <dialog id="hangar" aria-labelledby="hangarTitle">
-        <div class="hangar-heading">
+        <header class="hangar-heading">
           <h2 id="hangarTitle">Hangar</h2>
-          <strong id="wallet"></strong>
+          <div class="hangar-wallet"><span>Flight credits</span><strong id="wallet"></strong></div>
+        </header>
+        <div id="workbenches" role="group" aria-label="Upgrade workbench">
+          <button type="button" data-scope="kestrel">Kestrel</button>
+          <button type="button" data-scope="needle">Needle</button>
+          <button type="button" data-scope="manta">Manta</button>
+          <button type="button" data-scope="fleet">Fleet</button>
         </div>
-        <p>Install permanent upgrades for your next patrol.</p>
-        <div id="parts"></div>
-        <p id="hangarStatus" role="status"></p>
-        <form method="dialog"><button class="action" type="submit">Back</button></form>
+        <div id="workshopBody">
+          <section class="workshop-board" aria-labelledby="workshopName">
+            <div id="workshopPortrait" aria-hidden="true"></div>
+            <div class="workshop-ident">
+              <p id="workshopClass"></p><h3 id="workshopName"></h3><p id="workshopWeapon"></p>
+              <span id="workshopProgress"></span>
+            </div>
+            <dl id="workshopStats"></dl>
+          </section>
+          <div id="parts" aria-label="Permanent upgrades"></div>
+        </div>
+        <footer class="hangar-footer">
+          <p id="hangarStatus" role="status"></p>
+          <form method="dialog"><button class="action" type="submit">Back</button></form>
+        </footer>
       </dialog>
       <div id="touch" hidden>
         <div id="stick"><i></i></div>

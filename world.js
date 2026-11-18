@@ -326,7 +326,7 @@ window.PatrolWorld = (() => {
   uniform vec2 resolution;
   uniform vec3 pos,rt,up,fw;
   uniform float fov,tm;
-  uniform bool mesa,night;
+  uniform bool mesa,night,storm;
   uniform sampler2D elev,land,cloud;
   uniform highp sampler3D volume;
   out vec4 outColor;
@@ -348,6 +348,7 @@ window.PatrolWorld = (() => {
   }
   vec3 horizon(vec3 rd){
     float facing=smoothstep(-.45,.99,dot(normalize(rd.xz+vec2(.00001)),normalize(sunDir.xz)));
+    if(storm) return mix(vec3(.35,.42,.51),vec3(.62,.67,.69),facing);
     if(night) return mix(vec3(.12,.155,.30),vec3(.25,.33,.48),facing);
     if(mesa) return mix(vec3(.63,.74,.77),vec3(1.,.79,.59),facing);
     return mix(vec3(.72,.64,.79),vec3(1.,.77,.57),facing);
@@ -355,6 +356,14 @@ window.PatrolWorld = (() => {
   vec3 sky(vec3 rd,float b){
     vec3 hor=horizon(rd);
     float a=max(0.,rd.y);
+    if(storm){
+      // A broad ceiling sits behind the lower, navigable cloud banks.
+      vec2 sheet=(pos.xz-vec2(9.,2.)*tm+rd.xz*(1800./max(.09,a+.07)))*.00047;
+      float folds=.65*noise(sheet*vec2(.78,1.5))+.26*noise(sheet*3.2)+.09*noise(sheet*7.);
+      float rim=smoothstep(.33,.78,folds);
+      vec3 ceiling=mix(vec3(.105,.135,.21),vec3(.39,.445,.50),floor(rim*5.+b)/5.);
+      return mix(hor,ceiling,smoothstep(-.025,.24,a));
+    }
     if(night){
       vec3 moon=normalize(vec3(.247,.31,.947));
       vec3 col=mix(hor,vec3(.061,.079,.188),smoothstep(.015,.38,a));
@@ -441,15 +450,18 @@ window.PatrolWorld = (() => {
     vec3 col=mix(vec3(.38,.77,.72),vec3(.125,.335,.468),bands*.25);
     if(mesa) col=mix(vec3(.38,.83,.73),vec3(.095,.46,.48),bands*.25);
     if(night) col=mix(vec3(.18,.39,.45),vec3(.055,.15,.255),bands*.25);
+    if(storm) col=mix(vec3(.34,.53,.55),vec3(.11,.215,.30),bands*.25);
     float fade=1.-smoothstep(750.,3600.,t);
     vec2 wave=p.xz+vec2(tm*5.,tm*2.);
     float sw=sin(wave.y*.12+sin(wave.x*.037)*1.4)+sin(wave.y*.2+wave.x*.006);
     float shore=depth+sw*1.65;
     if(shore<1.7 || (shore<4.2 && sw>1.23))col=night?vec3(.38,.58,.65):vec3(.85,.91,.78);
+    if(storm && shore<4.2 && sw>1.12)col=vec3(.64,.72,.74);
     float skim=pow(1.-clamp(-rd.y,.0,1.),5.);
     col=mix(col,horizon(rd),skim*.39);
 
     float path=pow(max(0.,dot(normalize(rd.xz+vec2(.00001)),normalize(sunDir.xz))),40.)*(1.-smoothstep(.48,.95,-rd.y));
+    if(storm) path=0.;
     vec2 pix=p.xz/vec2(32.+t*.008,5.+t*.002);
     float ripple=noise(vec2(pix.x+tm*.45,pix.y+sin(pix.x*.32)*1.3));
     float glint=ripple+sw*.033;
@@ -458,7 +470,7 @@ window.PatrolWorld = (() => {
     return col;
   }
   float cloudSdf(vec3 p){
-    vec2 uv=(p.xz-vec2(tm*2.,0))/tile;
+    vec2 uv=(p.xz-vec2(tm*(storm?9.:2.),0))/tile;
     float lateral=texture(cloud,uv).r*2300.-500.;
     if(lateral>135.)return lateral*.8;
     float d=texture(volume,vec3(uv.x,p.y/1020.,uv.y)).r*255.-92.;
@@ -494,6 +506,10 @@ window.PatrolWorld = (() => {
     vec3 c=mix(vec3(.58,.48,.62),vec3(.96,.69,.62),smoothstep(.02,.64,light));
     c=mix(c,vec3(1.,.894,.762),smoothstep(.49,1.,light));
     if(night) c=mix(vec3(.115,.135,.245),vec3(.41,.47,.59),light);
+    if(storm){
+      c=mix(vec3(.13,.15,.235),vec3(.32,.365,.44),smoothstep(.05,.72,light));
+      c=mix(c,vec3(.56,.60,.63),smoothstep(.62,1.,light));
+    }
     return mix(c,horizon(rd),.26*smoothstep(1200.,8500.,t));
   }
   void main(){
@@ -528,10 +544,14 @@ window.PatrolWorld = (() => {
         float brightness=dot(col,vec3(.30,.54,.16));
         col=vec3(.032,.050,.105)+col*vec3(.20,.29,.43)+brightness*vec3(.09,.11,.19);
       }
-      vec2 shadowUV=(p.xz+sunDir.xz*max(0.,230.-h)*2.6-vec2(tm*2.,0))/tile;
+      if(storm && h>=.45){
+        float brightness=dot(col,vec3(.30,.54,.16));
+        col=mix(col,vec3(brightness),.28)*vec3(.57,.65,.76)+vec3(.034,.054,.09);
+      }
+      vec2 shadowUV=(p.xz+sunDir.xz*max(0.,230.-h)*2.6-vec2(tm*(storm?9.:2.),0))/tile;
       float occ=1.-smoothstep(.168,.231,texture(cloud,shadowUV).r);
       col=mix(col,col*vec3(.69,.68,.83),occ*.45);
-      float haze=1.-exp(-ground*.000214);
+      float haze=1.-exp(-ground*(storm?.00038:.000214));
       col=mix(col,horizon(rd),haze*.88);
     }else col=sky(rd,b);
     // Quantize both illumination and haze onto a common ordered pixel lattice.
@@ -624,7 +644,7 @@ window.PatrolWorld = (() => {
     gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     gl.uniform1i(gl.getUniformLocation(program, "volume"), 3);
     const loc = Object.fromEntries(
-      ["resolution", "pos", "rt", "up", "fw", "fov", "tm", "mesa", "night"].map((k) => [k, gl.getUniformLocation(program, k)]),
+      ["resolution", "pos", "rt", "up", "fw", "fov", "tm", "mesa", "night", "storm"].map((k) => [k, gl.getUniformLocation(program, k)]),
     );
     function height(x, z) {
       const fx = (x * SIZE) / SPAN - 0.5,
@@ -645,11 +665,11 @@ window.PatrolWorld = (() => {
     // Only CPU elevations and the cloud top map are used after upload.
     delete data.surface;
     delete data.cloudVolume;
-    let night = false;
+    let sky = "day";
     onProgress(1);
     function cloudTop(x, z, time = 0) {
       const size = data.cloudSize;
-      const i = Math.floor(((x - time * 2) * size) / SPAN) & (size - 1),
+      const i = Math.floor(((x - time * (sky === "storm" ? 9 : 2)) * size) / SPAN) & (size - 1),
         j = Math.floor((z * size) / SPAN) & (size - 1);
       const idx = 4 * (j * size + i);
       return (data.cloudMap[idx] * 2300) / 255 - 500 < 0 ? (data.cloudMap[idx + 1] * 1020) / 255 : null;
@@ -659,8 +679,9 @@ window.PatrolWorld = (() => {
       cloudTop,
       waterLevel: 0,
       mapId,
-      get night() { return night; },
-      setNight(value) { night = !!value; },
+      get night() { return sky === "night"; },
+      get storm() { return sky === "storm"; },
+      setSky(value) { sky = value; },
       dispose() {
         for (const texture of tex) gl.deleteTexture(texture);
         gl.deleteTexture(volume);
@@ -675,7 +696,8 @@ window.PatrolWorld = (() => {
         gl.activeTexture(gl.TEXTURE3);
         gl.bindTexture(gl.TEXTURE_3D, volume);
         gl.uniform1i(loc.mesa, mapId === "mesa");
-        gl.uniform1i(loc.night, night);
+        gl.uniform1i(loc.night, sky === "night");
+        gl.uniform1i(loc.storm, sky === "storm");
         gl.viewport(0, 0, canvas.width, canvas.height);
         gl.uniform2f(loc.resolution, canvas.width, canvas.height);
         gl.uniform3f(loc.pos, cam.x, cam.y, cam.z);
