@@ -608,7 +608,7 @@
             );
           if (surface) particle("scorch", x, y + 0.7, z, 20, size * 1.2);
         } else particle("foam", x, y + 0.45, z, 2.1, size * 1.55);
-        sound("boom");
+        sound(wet ? "splash" : "boom");
       }
     }
     function damage(e, amount) {
@@ -642,7 +642,7 @@
       }
       p.hitFlash = 1;
       lastDamage = g.time;
-      sound("hurt");
+      sound(leak > 0.01 ? "hurt" : "deflect");
       if (p.hull <= 0) {
         g.state = "dead";
         impact(p.x, p.y, p.z, 21);

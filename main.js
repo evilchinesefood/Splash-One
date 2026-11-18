@@ -137,7 +137,13 @@ const patrol = (() => {
     const enabled = PatrolAudio.enabled;
     $("audio").innerHTML = '<span id="audioIcon">♪</span> Sound ' + (enabled ? "on" : "off");
     $("audio").setAttribute("aria-pressed", String(enabled));
+    $("music").textContent = "Music " + (PatrolAudio.musicEnabled ? "on" : "off");
+    $("music").setAttribute("aria-pressed", String(PatrolAudio.musicEnabled));
   }
+  $("music").onclick = () => {
+    PatrolAudio.toggleMusic();
+    syncSoundButton();
+  };
   async function unlockSound() {
     if (PatrolAudio.enabled && !(await PatrolAudio.start()))
       toast("Audio unavailable. Use the sound button to retry.");
@@ -365,7 +371,7 @@ const patrol = (() => {
     $("flight").hidden = home;
     $("pause").hidden = !active();
     $("touch").hidden = !active() || !touchMode;
-    PatrolAudio.flight(active(), g.player.boost);
+    PatrolAudio.flight(active(), g);
     document.body.classList.toggle("steering", active());
     document.body.classList.toggle("flying", !home);
     document.body.classList.toggle("cockpit", !home && view === 1);
@@ -617,7 +623,7 @@ const patrol = (() => {
         toastTimer -= dt;
         if (toastTimer <= 0) $("toast").textContent = "";
       }
-      PatrolAudio.flight(active(), g.player.boost);
+      PatrolAudio.flight(active(), g);
       const cam = camera();
       world.render(cam, g.time);
       ink.clearRect(0, 0, overlay.width, overlay.height);
