@@ -687,7 +687,9 @@
       }
     }
   }
-  const contactNames = { cutter: "CUTTER", gunboat: "GUNBOAT", bomber: "BROADWING", dart: "DART", prism: "PRISM" };
+  const contactNames = { jet: "JET", interceptor: "INTERCEPTOR", crescent: "CRESCENT", carrier: "CARRIER",
+    cutter: "CUTTER", gunboat: "GUNBOAT", bomber: "BROADWING", dart: "DART",
+    prism: "PRISM", relay: "RELAY", radar: "RADAR" };
   const meshes = {
     cutter: buildBoat(false),
     gunboat: buildBoat(true),
@@ -1053,6 +1055,23 @@
       }
       if (points.length < 3) return;
       ctx.globalAlpha = kind === "scorch" ? 0.48 * (1 - t) : 0.75 * (1 - t);
+      if (kind === "foam" && t < .40) {
+        const age = t / .40;
+        const lift = Math.sin(Math.PI * age);
+        ctx.globalAlpha = .92 * (1 - age * age);
+        for (let i = 0; i < 5; i++) {
+          const a = i * TAU / 5, base = fx.size * (.12 + .25 * age);
+          const reach = fx.size * (.20 + .52 * age);
+          const left = project(fx.x + base * Math.cos(a - .9), fx.y, fx.z + base * Math.sin(a - .9));
+          const right = project(fx.x + base * Math.cos(a + .9), fx.y, fx.z + base * Math.sin(a + .9));
+          const crest = project(fx.x + reach * Math.cos(a), fx.y + lift * fx.size * (1.1 + .22 * (i % 3)),
+            fx.z + reach * Math.sin(a));
+          if (!left || !right || !crest) continue;
+          polygon(ctx, [[left.x,left.y],[crest.x,crest.y],[right.x,right.y]], i % 2 ? "#75b7be" : "#b1dbd7");
+          line(ctx, crest.x, crest.y, crest.x * .7 + left.x * .3, crest.y * .7 + left.y * .3, "#eff8e5");
+        }
+        ctx.globalAlpha = .75 * (1 - t);
+      }
       if (kind === "scorch") {
         polygon(ctx, points, "#4f3944");
         for (let j = 0; j < 6; j++) {
@@ -1159,15 +1178,21 @@
     const v = [object.x - cam.x, object.y - cam.y, object.z - cam.z];
     const dot = axis => v[0] * axis[0] + v[1] * axis[1] + v[2] * axis[2];
     let dx = dot(cam.right), dy = -dot(cam.up);
-    if (Math.abs(dx) + Math.abs(dy) < 0.01) dy = 1;
-    if (dot(cam.forward) < 0 && Math.abs(dy) < Math.abs(dx) * 0.18) dy = 0.2 * Math.abs(dx);
+    const ahead = v[0] * cam.forward[0] + v[2] * cam.forward[2];
+    const behind = ahead < 0 && Math.hypot(cam.forward[0], cam.forward[2]) > .05;
+    if (behind) {
+      // A contact aft needs a heading reversal, even when the camera sits above the jet.
+      const side = v[0] * cam.forward[2] - v[2] * cam.forward[0];
+      dx = side < ahead * .015 ? -1 : 1;
+      dy = 0;
+    } else if (Math.abs(dx) + Math.abs(dy) < 0.01) dy = 1;
     const n = Math.hypot(dx, dy);
     dx /= n;
     dy /= n;
-    const edgeY = dy > 0 ? (cockpit ? 0.18 : 0.35) * h : 0.34 * h;
+    const edgeY = dy > 0 ? (cockpit ? 0.12 : 0.35) * h : 0.34 * h;
     const t = Math.min((w / 2 - 17 - inset) / (Math.abs(dx) || 0.0001),
       (edgeY - inset) / (Math.abs(dy) || 0.0001));
-    return { x: w / 2 + dx * t, y: h / 2 + dy * t, dx, dy };
+    return { x: w / 2 + dx * t, y: h / 2 + dy * t, dx, dy, behind };
   }
 
   function corners(ctx, x, y, r, color) {
@@ -1176,6 +1201,8 @@
       for (const j of [-1, 1]) {
         const px = x + i * r,
           py = y + j * r;
+        line(ctx, px - 1, py - 1, px - i * arm - 1, py - 1, "#37414a", 3);
+        line(ctx, px - 1, py - 1, px - 1, py - j * arm - 1, "#37414a", 3);
         line(ctx, px, py, px - i * arm, py, color);
         line(ctx, px, py, px, py - j * arm, color);
       }
@@ -1224,9 +1251,7 @@
       const inView = p && p.x > 16 && p.x < w - 16 && p.y > 22 && p.y < h * (g.cockpitBlend > 0.5 ? 0.65 : 0.86);
       if (inView) {
         const r = clamp(p.k * (target.kind === "carrier" ? 57 : 12) + 4, 6, 38);
-        ctx.globalAlpha = 0.73;
-        corners(ctx, p.x, p.y, r, amber);
-        ctx.globalAlpha = 1;
+        if (target !== g.lockTarget || !g.lockProgress) corners(ctx, p.x, p.y, r, amber);
         if (target.kind === "carrier" && target.maxHp) {
           const x = Math.round(p.x - 18),
             y = Math.round(p.y + r + 5);
@@ -1236,34 +1261,44 @@
           ctx.fillRect(x, y, Math.ceil(36 * saturate(target.hp / target.maxHp)), 2);
         }
       } else {
-        const { x, y, dx, dy } = edgeCue(cam, target, w, h, g.cockpitBlend > 0.5);
+        const { x, y, dx, dy, behind } = edgeCue(cam, target, w, h, g.cockpitBlend > 0.5);
         const sx = -dy, sy = dx;
-        polygon(
-          ctx,
-          [
-            [x + dx * 4, y + dy * 4],
-            [x - dx * 5 + sx * 4, y - dy * 5 + sy * 4],
-            [x - dx * 3, y - dy * 3],
-            [x - dx * 5 - sx * 4, y - dy * 5 - sy * 4],
-          ],
-          amber,
-        );
+        const arrow = [
+          [x + dx * 5, y + dy * 5],
+          [x - dx * 4 + sx * 4, y - dy * 4 + sy * 4],
+          [x - dx * 2, y - dy * 2],
+          [x - dx * 4 - sx * 4, y - dy * 4 - sy * 4],
+        ];
+        polygon(ctx, arrow, amber);
+        for (let i = 0; i < arrow.length; i++) {
+          const a = arrow[i], b = arrow[(i + 1) % arrow.length];
+          line(ctx, a[0], a[1], b[0], b[1], "#3e3535");
+        }
+        const meters = Math.hypot(target.x - e.x, target.y - e.y, target.z - e.z);
+        const range = meters < 1000 ? Math.round(meters / 10) * 10 + "M" : (meters / 1000).toFixed(1) + "KM";
+        const text = (behind ? "TURN " : "") + range;
+        const margin = typeWidth(text) / 2 + 3;
+        cockpitPlate(ctx, text, clamp(x, margin, w - margin), y + (dy > .45 ? -15 : 8), "#ffdf9a", "#3e3535");
       }
     }
     if (g.lockTarget && g.lockProgress > 0) {
       const t = g.lockTarget,
         p = project(t.x, t.y, t.z);
-      if (!p) return;
+      if (!p || p.x < 8 || p.x > w - 8 || p.y < 12 || p.y > h * (g.cockpitBlend > .5 ? .65 : .91)) return;
+      const ready = g.lockProgress >= 1;
       const r = clamp(p.k * (t.kind === "carrier" ? 56 : 10) + 4, 5, 40) + (1 - g.lockProgress) * 7;
-      const col = g.lockProgress >= 0.99 ? "#91ffd5" : "#ffe393";
+      const col = ready ? "#91ffd5" : "#ffe393";
       corners(ctx, p.x, p.y, r, col);
-      if (g.lockProgress >= 0.99) {
-        const name = contactNames[t.kind];
-        const text = name ? "LOCK " + name : "LOCK";
-        if (g.cockpitBlend > 0.5) {
-          const margin = typeWidth(text) / 2 + 3;
-          cockpitPlate(ctx, text, clamp(p.x, margin, w - margin), Math.max(2, p.y - r - 11), col);
-        } else label(ctx, text, p.x, p.y - r - 8, col, "center");
+      if (ready) {
+        const text = "LOCK " + contactNames[t.kind];
+        const margin = typeWidth(text) / 2 + 3;
+        cockpitPlate(ctx, text, clamp(p.x, margin, w - margin), Math.max(2, p.y - r - 11), col);
+      } else {
+        const x = Math.round(p.x) - 8, y = Math.max(1, Math.round(p.y - r) - 5);
+        ctx.fillStyle = "#3e3535";
+        ctx.fillRect(x - 1, y - 1, 18, 4);
+        ctx.fillStyle = col;
+        ctx.fillRect(x, y, Math.ceil(16 * g.lockProgress), 2);
       }
     }
   }

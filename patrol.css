@@ -768,12 +768,30 @@ body.cockpit #meters {
   padding: 8px 14px; font-weight: 700;
 }
 .hangar-link span { display: block; font: 11px ui-monospace, monospace; color: #ffcf91; }
+.debrief .panel { width: min(580px, 100%); }
+.debrief #modalText { margin: 8px 0 16px; }
 #earnings {
-  display: grid; gap: 5px; margin: 12px 0 18px; padding: 12px 14px;
-  border-left: 3px solid #ffc18b; background: #423744;
+  margin: 0 0 18px; background: #292532;
+  border: 1px solid #705e6d; border-left: 3px solid #ffc18b;
 }
-#earnedTotal { color: #ffcf91; font-size: 18px; }
-#earnedBreakdown { font-size: 13px; color: #f7e8d7; line-height: 1.4; }
+.earnings-total {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
+  padding: 11px 14px; background: #433645;
+}
+.earnings-total span { color: #f8d5b1; font-size: 14px; font-weight: 650; }
+#earnedTotal { color: #ffda9d; font-size: clamp(19px, 3vw, 26px); line-height: 1.05; }
+#earnedBreakdown { display: grid; grid-template-columns: repeat(auto-fit, minmax(58px, 1fr)); margin: 0; }
+#earnedBreakdown div { padding: 8px 10px; }
+#earnedBreakdown dt { color: #dacecc; font-size: 12px; }
+#earnedBreakdown dd { margin: 3px 0 0; color: #fff0ce; font: 700 14px ui-monospace, Menlo, monospace; }
+.debrief #actions { grid-auto-flow: column; grid-auto-columns: 1fr; }
+.debrief #actions .action { display: grid; place-items: center; min-height: 44px; padding: 8px 4px; text-align: center; }
+@media (max-height: 430px) {
+  .debrief { padding: 6px 10px; }
+  .debrief .panel { max-height: 100%; }
+  .debrief #earnings { margin-bottom: 10px; }
+  .debrief #modalText { margin: 5px 0 9px; }
+}
 #hangar {
   --bay-accent: #a5cddb;
   width: min(920px, calc(100% - 32px)); max-width: none; max-height: min(800px, 92dvh);
@@ -892,3 +910,15 @@ body.cockpit #meters {
   #workbenches button:not([aria-pressed="true"]):hover, .hangar-footer .action:hover { background: #46404b; }
   .part-controls button:enabled:hover { background: #ffcd97; }
 }
+
+#graphicsRecovery {
+  width: min(390px, calc(100% - 28px));
+  padding: 24px;
+  border: 1px solid #8d7771;
+  border-top: 3px solid #ffab70;
+  background: #2c2733;
+  color: #fff1d9;
+}
+#graphicsRecovery h2 { margin: 0; }
+#graphicsRecovery p { line-height: 1.5; }
+#graphicsRecovery::backdrop { background: #171523ca; }

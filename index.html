@@ -174,7 +174,8 @@
             </section>
           </div>
           <div id="earnings" hidden>
-            <strong id="earnedTotal"></strong><span id="earnedBreakdown"></span>
+            <div class="earnings-total"><span>Patrol earnings</span><strong id="earnedTotal"></strong></div>
+            <dl id="earnedBreakdown"></dl>
           </div>
           <div id="actions"></div>
           <div id="draftTools" aria-label="Fleet perks" hidden>
@@ -209,6 +210,11 @@
           <p id="hangarStatus" role="status"></p>
           <form method="dialog"><button class="action" type="submit">Back</button></form>
         </footer>
+      </dialog>
+      <dialog id="graphicsRecovery" aria-labelledby="graphicsHeading" aria-describedby="graphicsStatus">
+        <h2 id="graphicsHeading">Flight display interrupted</h2>
+        <p id="graphicsStatus">Waiting for the browser to restore the terrain.</p>
+        <button type="button" id="reloadGame">Reload game</button>
       </dialog>
       <div id="touch" hidden>
         <div id="stick"><i></i></div>

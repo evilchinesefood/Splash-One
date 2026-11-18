@@ -585,15 +585,7 @@ window.PatrolWorld = (() => {
       };
     });
   }
-  async function create(canvas, onProgress = () => {}, mapId = "lake") {
-    const gl = canvas.getContext("webgl2", {
-      antialias: false,
-      alpha: false,
-      depth: false,
-      preserveDrawingBuffer: false,
-    });
-    if (!gl) throw new Error("Patrol needs WebGL 2 to draw the world.");
-    const data = await maps(onProgress, mapId);
+  function uploadTerrain(gl, data) {
     const program = gl.createProgram();
     for (const [type, src] of [
       [gl.VERTEX_SHADER, vertex],
@@ -646,6 +638,18 @@ window.PatrolWorld = (() => {
     const loc = Object.fromEntries(
       ["resolution", "pos", "rt", "up", "fw", "fov", "tm", "mesa", "night", "storm"].map((k) => [k, gl.getUniformLocation(program, k)]),
     );
+    return { program, tex, volume, loc };
+  }
+  async function create(canvas, onProgress = () => {}, mapId = "lake") {
+    const gl = canvas.getContext("webgl2", {
+      antialias: false,
+      alpha: false,
+      depth: false,
+      preserveDrawingBuffer: false,
+    });
+    if (!gl) throw new Error("Patrol needs WebGL 2 to draw the world.");
+    const data = await maps(onProgress, mapId);
+    let graphics = gl.isContextLost() ? null : uploadTerrain(gl, data);
     function height(x, z) {
       const fx = (x * SIZE) / SPAN - 0.5,
         fz = (z * SIZE) / SPAN - 0.5,
@@ -662,9 +666,6 @@ window.PatrolWorld = (() => {
         (sample(i, j + 1) * (1 - a) + sample(i + 1, j + 1) * a) * b
       );
     }
-    // Only CPU elevations and the cloud top map are used after upload.
-    delete data.surface;
-    delete data.cloudVolume;
     let sky = "day";
     onProgress(1);
     function cloudTop(x, z, time = 0) {
@@ -682,12 +683,19 @@ window.PatrolWorld = (() => {
       get night() { return sky === "night"; },
       get storm() { return sky === "storm"; },
       setSky(value) { sky = value; },
+      restoreGraphics() {
+        graphics = uploadTerrain(gl, data);
+      },
       dispose() {
+        if (!graphics) return;
+        const { tex, volume, program } = graphics;
         for (const texture of tex) gl.deleteTexture(texture);
         gl.deleteTexture(volume);
         gl.deleteProgram(program);
       },
       render(cam, time) {
+        if (!graphics) return;
+        const { program, tex, volume, loc } = graphics;
         gl.useProgram(program);
         for (let unit = 0; unit < tex.length; unit++) {
           gl.activeTexture(gl.TEXTURE0 + unit);

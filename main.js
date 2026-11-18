@@ -81,6 +81,7 @@ const patrol = (() => {
   const coarse = matchMedia("(pointer:coarse)");
   const contacts = new Map();
   const desktopHeld = { fire: false, brake: false, boost: false };
+  let firePressed = false;
   const stick = $("stick");
   let stickId = null, touchMode = coarse.matches;
   document.body.classList.toggle("touch-active", touchMode);
@@ -161,8 +162,9 @@ const patrol = (() => {
 
   function clearInput() {
     releaseTouches();
-    desktopHeld.fire = desktopHeld.brake = desktopHeld.boost = false;
+    firePressed = desktopHeld.fire = desktopHeld.brake = desktopHeld.boost = false;
     Object.assign(input, {
+      moved: false,
       x: 0,
       y: 0,
       fire: false,
@@ -503,10 +505,20 @@ const patrol = (() => {
   });
   function showEarnings() {
     const bill = PatrolHangar.statement(g);
-    const lines = ["Flight time +" + bill.flight, "Targets +" + bill.combat, "Missions +" + bill.missions];
-    if (bill.bonus) lines.push("Carrier victory +" + bill.bonus);
-    $("earnedTotal").textContent = "Patrol earnings · " + bill.total + " credits";
-    $("earnedBreakdown").textContent = lines.join("  ·  ");
+    const lines = [["Flight time", bill.flight], ["Targets", bill.combat], ["Missions", bill.missions]];
+    if (bill.bonus) lines.push(["Carrier victory", bill.bonus]);
+    $("earnedTotal").textContent = bill.total.toLocaleString("en-US") + (bill.total === 1 ? " credit" : " credits");
+    const breakdown = $("earnedBreakdown");
+    breakdown.replaceChildren();
+    for (const [name, value] of lines) {
+      const row = document.createElement("div");
+      const label = document.createElement("dt");
+      const amount = document.createElement("dd");
+      label.textContent = name;
+      amount.textContent = "+" + value;
+      row.append(label, amount);
+      breakdown.append(row);
+    }
     settlement = PatrolHangar.deposit(g, bill).then(refreshWallet);
   }
   const airframePick = $("airframePick");
@@ -679,6 +691,7 @@ const patrol = (() => {
     modal.classList.toggle("pause-menu", phase === "paused");
     $("pauseDetails").hidden = $("pauseRegion").hidden = phase !== "paused";
     const debrief = ["won", "dead", "retired", "finished"].includes(phase);
+    modal.classList.toggle("debrief", debrief);
     $("earnings").hidden = !debrief;
     if (debrief) showEarnings();
     if (home) refreshWallet();
@@ -745,12 +758,9 @@ const patrol = (() => {
     } else {
       kicker = phase === "dead" ? g.lossReason || "Aircraft lost" : phase === "retired" ? "Patrol ended" : "Patrol complete";
       title = phase === "dead" ? "End of patrol" : "Welcome home";
-      detail =
-        "Wave " +
-        g.wave +
-        " reached · " +
-        g.kills +
-        " targets destroyed. Milestone unlocks carry into your next patrol.";
+      const seconds = Math.floor(g.elapsed);
+      const clock = Math.floor(seconds / 60) + ":" + String(seconds % 60).padStart(2, "0");
+      detail = "Wave " + g.wave + " · " + g.kills + (g.kills === 1 ? " target" : " targets") + " destroyed · " + clock + " flown";
       actions.append(button("Hangar", openHangar, null, true), button("Fly again", start), button("Flight deck", flightDeck));
     }
     $("modalKicker").textContent = kicker;
@@ -787,7 +797,7 @@ const patrol = (() => {
     e.preventDefault();
     steer(e);
     captureFlightMouse();
-    if (e.button === 0) desktopHeld.fire = input.fire = true;
+    if (e.button === 0) firePressed = desktopHeld.fire = input.fire = true;
     if (e.button === 2) input.missile = true;
   });
   window.addEventListener("mouseup", (e) => {
@@ -798,7 +808,7 @@ const patrol = (() => {
   });
   $("stage").addEventListener("contextmenu", (e) => e.preventDefault());
   window.addEventListener("keydown", (e) => {
-    if (hangar.open) return;
+    if (hangar.open || recovery.open) return;
     if ((e.code === "Escape" || e.code === "KeyP") && !e.repeat) {
       pause();
       return;
@@ -862,7 +872,8 @@ const patrol = (() => {
       contact.radius = Math.max(1, stick.getBoundingClientRect().width * 0.4);
       input.x = input.y = 0;
       input.moved = true;
-    } else if (key === "missile") input.missile = true;
+    } else if (key === "fire") firePressed = true;
+    else if (key === "missile") input.missile = true;
     else if (key === "roll") input.roll = input.x < -0.1 ? -1 : 1;
     refreshTouchFeedback();
   }
@@ -894,7 +905,7 @@ const patrol = (() => {
   function frame(stamp) {
     const raw = last ? (stamp - last) / 1000 : fixed;
     last = stamp;
-    if (!document.hidden) {
+    if (!document.hidden && !recovery.open) {
       if (raw > 0.038 && raw < 1) slow++;
       else slow = Math.max(0, slow - 1);
       if (slow > 48 && scale > 210) {
@@ -907,7 +918,8 @@ const patrol = (() => {
       if (active() || g.state === "title" || g.state === "dead") {
         carry += dt;
         while (carry >= fixed) {
-          g.step(fixed, input);
+          g.step(fixed, firePressed && !input.fire ? { ...input, fire: true } : input);
+          firePressed = false;
           input.missile = false;
           input.roll = 0;
           carry -= fixed;
@@ -933,6 +945,27 @@ const patrol = (() => {
     }
     requestAnimationFrame(frame);
   }
+  const recovery = $("graphicsRecovery");
+  recovery.addEventListener("cancel", event => event.preventDefault());
+  $("reloadGame").onclick = () => location.reload();
+  canvas.addEventListener("webglcontextlost", event => {
+    event.preventDefault();
+    if (active()) pause();
+    clearInput();
+    $("graphicsStatus").textContent = "Waiting for the browser to restore the terrain. Reloading ends the current patrol.";
+    if (!recovery.open) recovery.showModal();
+  });
+  canvas.addEventListener("webglcontextrestored", () => {
+    try {
+      world?.restoreGraphics();
+      carry = 0;
+      last = 0;
+      recovery.close();
+    } catch (error) {
+      console.error(error);
+      $("graphicsStatus").textContent = "The terrain could not be restored. Reload the game to fly again.";
+    }
+  });
   const deck = PatrolDeck.create();
   hangar.addEventListener("close", previewAirframe);
   function updateSky() {
