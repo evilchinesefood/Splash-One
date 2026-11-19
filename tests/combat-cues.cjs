@@ -71,3 +71,27 @@ test("round flight and crossing-target prediction meet at the same time for each
   }
   assert.ok(times.needle < times.kestrel && times.kestrel < times.manta);
 });
+
+test("a ridge masks a missile lock while the objective tracker stays on station", () => {
+  let ridge = true;
+  const world = { height: (_x, z) => ridge && z > 520 && z < 532 ? 650 : 0 };
+  const game = scope.window.SplashOneGame.create(world);
+  game.start();
+  const target = game.enemies[0], p = game.player;
+  Object.assign(target, { kind: "relay", ground: true, mandatory: true, x: 0, y: p.y, z: 1200, fireIn: 10 });
+  game.enemies = [target];
+  game.target = target;
+  game.step(step, { moved: true, missile: true });
+  assert.equal(game.target, target);
+  assert.equal(game.lockTarget, null);
+  assert.equal(game.shots.find(s => s.kind === "missile").target, null);
+  ridge = false;
+  for (let i = 0; i < 48; i++) game.step(step, { moved: true });
+  assert.equal(game.lockTarget, target);
+  assert.equal(game.lockProgress, 1);
+  ridge = true;
+  game.step(step, { moved: true });
+  assert.equal(game.lockTarget, null);
+  assert.equal(game.lockProgress, 0);
+  assert.equal(game.target, target);
+});

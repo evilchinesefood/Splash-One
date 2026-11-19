@@ -5,6 +5,7 @@
 
   const TAU = 2 * Math.PI;
   const gunRoundLife = 1.64;
+  const extraWingmen = difficulty => (difficulty - 1) * 3;
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const mix = (a, b, t) => a + (b - a) * t;
   const angle = (a) => Math.atan2(Math.sin(a), Math.cos(a));
@@ -274,6 +275,7 @@
     });
     const g = {
       world,
+      terrainVisible,
       player: freshPlayer(),
       enemies: [],
       allies: [],
@@ -412,7 +414,7 @@
       nextWave();
     }
     function withWingmen(kinds) {
-      const extra = (g.difficulty - 1) * 2;
+      const extra = extraWingmen(g.difficulty);
       if (!extra) return kinds;
       return kinds.concat(Array.from({length: extra}, (_, i) => kinds[i % kinds.length]));
     }
@@ -1021,6 +1023,16 @@
       const d = Math.max(1, distance(from, to));
       return [(to.x - from.x) / d, (to.y - from.y) / d, (to.z - from.z) / d];
     }
+    function terrainVisible(from, to) {
+      const dx = to.x - from.x, dy = to.y - from.y, dz = to.z - from.z;
+      // One 8 m terrain cell per step throughout missile range. Cap distant camera rays.
+      const steps = clamp(Math.ceil(Math.hypot(dx, dz) / 8), 2, 240);
+      for (let i = 1; i < steps; i++) {
+        const t = i / steps;
+        if (world.height(from.x + dx * t, from.z + dz * t) > from.y + dy * t + 4) return false;
+      }
+      return true;
+    }
     function targeting(dt) {
       const p = g.player,
         f = forward(p),
@@ -1041,7 +1053,7 @@
         const radius = Math.min(0.25, e.radius / d);
         if (dot < Math.cos(0.32 + radius + link * 0.052 + (e === g.lockTarget ? 0.085 : 0))) continue;
         const weight = dot + (e === g.lockTarget ? 0.035 : 0) - d * 0.000025;
-        if (weight > score) {
+        if (weight > score && terrainVisible(p, e)) {
           best = e;
           score = weight;
         }
@@ -1560,7 +1572,7 @@
           endWave();
           return;
         }
-        if (missionTime >= nextRaid && g.enemies.length < 5 + (g.difficulty - 1) * 2) {
+        if (missionTime >= nextRaid && g.enemies.length < 5 + extraWingmen(g.difficulty)) {
           group = (group + 1) % groups.length;
           spawnGroup();
           nextRaid = missionTime + 9;
@@ -1603,5 +1615,5 @@
     return g;
   }
 
-  window.SplashOneGame = { create, airframes, tunedFrame };
+  window.SplashOneGame = { create, airframes, tunedFrame, extraWingmen };
 })();

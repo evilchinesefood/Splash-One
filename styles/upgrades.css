@@ -194,6 +194,24 @@
   .upgrade-draft .gear-name { font-size: 18px; margin-block: 3px; }
   .upgrade-draft .gear-detail { font-size: 12px; }
 }
+@media (max-width: 500px) and (orientation: portrait) {
+  .upgrade-draft #actions { grid-template-columns: 1fr; max-width: none; gap: 8px; }
+  .upgrade-draft .upgrade-card {
+    display: grid; grid-template-columns: 54px minmax(0,1fr); gap: 2px 10px;
+    padding: 8px 10px; border-bottom-width: 1px; border-left: 3px solid var(--gear-color);
+  }
+  .upgrade-draft .gear-art {
+    grid-area: 1 / 1 / span 3; align-self: stretch; border: 1px solid #665764;
+  }
+  .upgrade-draft .gear-level, .upgrade-draft .gear-name, .upgrade-draft .gear-detail {
+    grid-column: 2; margin: 0;
+  }
+  .upgrade-draft .gear-name { font-size: 18px; }
+  .upgrade-draft .gear-detail { line-height: 1.25; }
+  .upgrade-draft .gear-stats, .upgrade-draft .gear-focus { grid-column: 1/-1; margin: 3px 0 0; }
+  .upgrade-draft .gear-stats { gap: 2px; padding-top: 4px; }
+  .upgrade-draft .gear-values { white-space: nowrap; }
+}
 
 #draftTools {
   display: flex;

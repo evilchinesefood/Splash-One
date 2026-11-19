@@ -113,6 +113,10 @@
   .deck-pick-copy {padding:6px;gap:3px;}
   .deck-pick-copy strong {font-size:13px;}
   .deck-pick-copy small {font-size:9px;}
+  .choice-stats { grid-template-columns: repeat(3,minmax(0,1fr)); gap: 4px 8px; padding: 7px 9px; }
+  .choice-stat { margin: 0; }
+  .choice-stat span { font-size: 10px; }
+  .choice-stat b { font-size: 13px; white-space: nowrap; }
 }
 
 
@@ -122,4 +126,14 @@
 @media (max-width: 520px), (max-height: 520px) {
   .sortie-options { gap: 8px 12px; margin-bottom: 10px; }
   .sortie-options button { padding-inline: 5px; }
+}
+
+#difficultyHint {
+  margin-left: 4px;
+  padding: 1px 4px;
+  background: #251e2bd9;
+  font: 600 11px/1.2 system-ui, sans-serif;
+  letter-spacing: 0;
+  text-transform: none;
+  color: #ffe2b6;
 }

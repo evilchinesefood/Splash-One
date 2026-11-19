@@ -21,6 +21,8 @@ def check(browser, url, width, height, touch):
         button = selector.get_by_role("button", name=str(level))
         press(button)
         expect(button).to_have_attribute("aria-pressed", "true")
+        expected_hint = "Standard formations" if level == 1 else f"+{3 * (level - 1)} enemies per formation"
+        expect(p.locator("#difficultyHint")).to_have_text(expected_hint)
         assert p.locator("#home").evaluate("el=>el.scrollWidth<=el.clientWidth")
         if level == 3:
             p.reload()
@@ -28,7 +30,7 @@ def check(browser, url, width, height, touch):
         press(launch)
         state = p.evaluate("""() => ({level: splashOne.game.difficulty,
             fighters: splashOne.game.enemies.filter(e=>e.mandatory).length})""")
-        assert state == {"level": level, "fighters": 9 + 2 * (level - 1)}, state
+        assert state == {"level": level, "fighters": 9 + 3 * (level - 1)}, state
         if touch:
             press(p.get_by_role("button", name="Pause", exact=True))
         else:

@@ -70,6 +70,7 @@ const splashOne = (() => {
   }
   drawMark();
   let loadingMap = false;
+  let sceneDirty = true;
   let g,
     world,
     minutes = 10,
@@ -116,6 +117,7 @@ const splashOne = (() => {
   $("showLead").checked = saved.showLead !== false;
   $("leftHanded").checked = saved.leftHanded === true;
   function applyFlightSettings() {
+    sceneDirty = true;
     const left = $("leftHanded").checked;
     document.body.classList.toggle("left-handed", left);
     $("stickSide").textContent = left ? "right" : "left";
@@ -287,6 +289,7 @@ const splashOne = (() => {
   const actionPad = document.querySelector("#touch .pad");
   let cockpitSpace = null;
   function resize() {
+    sceneDirty = true;
     const rect = canvas.getBoundingClientRect(),
       aspect = rect.width / Math.max(1, rect.height);
     cockpitSpace = null;
@@ -377,6 +380,7 @@ const splashOne = (() => {
   }
   function changeView(next = (view + 1) % cameraIds.length) {
     if (g?.state !== "playing" || next === view) return;
+    sceneDirty = true;
     transition = !paused && lastCam ? { t: time, from: lastCam, cb: g.cockpitBlend || 0 } : null;
     view = next;
     g.view = view;
@@ -747,6 +751,11 @@ const splashOne = (() => {
   const difficultyKey = "splashOne.difficulty";
   function selectDifficulty(value) {
     difficulty = value === 2 || value === 3 ? value : 1;
+    const hint = $("difficultyHint");
+    if (hint) {
+      const extra = SplashOneGame.extraWingmen(difficulty);
+      hint.textContent = extra ? "+" + extra + " enemies per formation" : "Standard formations";
+    }
     for (const button of difficultyButtons) button.setAttribute("aria-pressed", Number(button.dataset.difficulty) === difficulty);
   }
   try { selectDifficulty(Number(localStorage.getItem(difficultyKey))); } catch {}
@@ -942,6 +951,7 @@ const splashOne = (() => {
     const key = phase + ":" + g.wave;
     if (lastPanel === key) return;
     lastPanel = key;
+    sceneDirty = true;
     if (phase === "playing") captureFlightMouse();
     else releaseFlightMouse();
     const modal = $("modal");
@@ -1116,6 +1126,7 @@ const splashOne = (() => {
     clearInput();
   });
   document.addEventListener("visibilitychange", () => {
+    sceneDirty = true;
     if (document.hidden && active()) pause();
   });
   const touchButtons = [...document.querySelectorAll("[data-control]")];
@@ -1190,7 +1201,8 @@ const splashOne = (() => {
     const raw = last ? (stamp - last) / 1000 : fixed;
     last = stamp;
     if (!document.hidden && !recovery.open) {
-      if (raw > 0.038 && raw < 1) slow++;
+      const animating = active() || g.state === "title" || g.state === "dead";
+      if (animating && raw > 0.038 && raw < 1) slow++;
       else slow = Math.max(0, slow - 1);
       if (slow > 48 && scale > 210) {
         scale = Math.max(210, Math.round(scale * 0.88));
@@ -1199,7 +1211,7 @@ const splashOne = (() => {
       }
       const dt = Math.min(0.1, raw);
       time += dt;
-      if (active() || g.state === "title" || g.state === "dead") {
+      if (animating) {
         carry += dt;
         while (carry >= fixed) {
           g.step(fixed, firePressed && !input.fire ? { ...input, fire: true } : input);
@@ -1218,11 +1230,14 @@ const splashOne = (() => {
         if (toastTimer <= 0) $("toast").textContent = "";
       }
       SplashOneAudio.flight(active(), g);
-      const cam = camera();
-      world.render(cam, g.time);
-      ink.clearRect(0, 0, overlay.width, overlay.height);
-      SplashOneArt.draw(ink, g, cam, projectFor(cam));
-      if (stamp - lastUi > 90 || lastPanel !== (paused ? "paused" : g.state) + ":" + g.wave) {
+      if (animating || transition || sceneDirty) {
+        const cam = camera();
+        world.render(cam, g.time);
+        ink.clearRect(0, 0, overlay.width, overlay.height);
+        SplashOneArt.draw(ink, g, cam, projectFor(cam));
+        sceneDirty = false;
+      }
+      if ((animating && stamp - lastUi > 90) || lastPanel !== (paused ? "paused" : g.state) + ":" + g.wave) {
         sync();
         lastUi = stamp;
       }
@@ -1242,6 +1257,7 @@ const splashOne = (() => {
   canvas.addEventListener("webglcontextrestored", () => {
     try {
       world?.restoreGraphics();
+      sceneDirty = true;
       carry = 0;
       last = 0;
       recovery.close();

@@ -944,3 +944,31 @@ body.cockpit #flightStatus {
   .finish-sample { aspect-ratio: 3.05; }
   .finish-sample canvas { width: 76%; }
 }
+@media (max-height: 430px) and (min-width: 480px) and (orientation: landscape) {
+  #workshopBody {
+    display: grid; grid-template-columns: minmax(125px, .68fr) minmax(0, 1.75fr); overflow: hidden;
+  }
+  .workshop-board, #parts, #finishes {
+    overflow: auto; overscroll-behavior: contain; scrollbar-color: #877583 #332c39;
+  }
+  .workshop-board {
+    display: block; padding: 7px 9px; border: 0; border-right: 1px solid #584d5c;
+  }
+  #workshopPortrait { max-width: 110px; margin-inline: auto; }
+  .workshop-ident { padding: 5px 0; }
+  .workshop-ident h3 { margin: 1px 0; font-size: 19px; }
+  #workshopWeapon, #workshopStats, #workshopStats dd { font-size: 12px; }
+  #workshopProgress { margin-top: 2px; padding: 0; border: 0; font-size: 11px; }
+  #workshopStats, .workshop-board:has(.fleet-formation) #workshopStats { grid-template-columns: 1fr auto; gap: 2px 4px; padding-top: 5px; }
+  #workshopStats dt:nth-of-type(even) { padding-left: 0; }
+  #parts, #finishes { padding: 7px; }
+}
+@media (max-height: 430px) and (min-width: 480px) and (max-width: 680px) {
+  #parts { grid-template-columns: 1fr; }
+  .part { grid-template-columns: 40px 1fr auto; grid-template-rows: auto auto; gap: 3px 8px; padding: 8px; }
+  .part canvas { width: 40px; }
+  .part p { grid-row: 2; }
+  .part-controls { grid-column: 3; grid-row: 1; flex-direction: column-reverse; gap: 3px; }
+  .part-controls button { min-height: 36px; min-width: 60px; }
+  .finish-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+}

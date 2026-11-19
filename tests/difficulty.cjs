@@ -35,13 +35,13 @@ function run(difficulty) {
   return waves;
 }
 
-test("difficulty preserves the original formations and adds two or four wingmen throughout campaign and endless", () => {
+test("difficulty preserves the original formations and adds three or six wingmen throughout campaign and endless", () => {
   const baseline = run();
   assert.deepEqual(run(1), baseline);
   assert.deepEqual(baseline.map(w => w.total), [10, 5, 6, 8, 6, 6, 6, 8, 6, 6]);
   for (const level of [2, 3]) {
     const waves = run(level);
-    const extra = 2 * (level - 1);
+    const extra = 3 * (level - 1);
     for (const [i, w] of waves.entries()) {
       assert.equal(w.total, baseline[i].total + extra, "additional contacts on wave " + (i + 1));
       assert.equal(w.level, level);

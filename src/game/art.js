@@ -924,16 +924,6 @@
     polygon(ctx, pts, "#343344");
     ctx.globalAlpha = 1;
   }
-  function visible(g, cam, e) {
-    const dx = e.x - cam.x,
-      dy = e.y - cam.y,
-      dz = e.z - cam.z;
-    for (let i = 1; i <= 7; i++) {
-      const t = i / 8;
-      if (g.world.height(cam.x + dx * t, cam.z + dz * t) > cam.y + dy * t + 4) return false;
-    }
-    return true;
-  }
   function nightLights(ctx, e, b, project, time) {
     const tip = e.frame ? [e.frame.tip, -.2, e.frame.tipZ] : e.kind === "carrier" ? [53, 0, -26] : e.kind === "bomber" ? [23.6, -.4, -6.8]
       : e.kind === "dart" ? [6.3, -.1, -7.7] : e.kind === "crescent" ? [9.2, 0, -4.5] : [8.7, -.2, -3.8];
@@ -1262,7 +1252,7 @@
       const p = project(pickup.x, pickup.y, pickup.z);
       const cockpit = g.cockpitBlend > 0.5;
       if (!p || p.x < 15 || p.x > w - 15 || p.y < 20 || p.y > h * (cockpit ? 0.65 : 0.91) ||
-          !visible(g, cam, pickup)) {
+          !g.terrainVisible(cam, pickup)) {
         const { x, y, dx, dy } = edgeCue(cam, pickup, w, h, cockpit, 13);
         const style = pickupStyles[pickup.kind];
         line(ctx, x, y, x + dx * 7, y + dy * 7, style.dark, 3);
@@ -1273,13 +1263,19 @@
       }
     }
     const target = g.target || g.lockTarget;
+    const lockInSight = g.lockTarget && g.terrainVisible(cam, g.lockTarget);
     if (target) {
       const p = project(target.x, target.y, target.z);
       const inView = p && p.x > 16 && p.x < w - 16 && p.y > 22 && p.y < h * (g.cockpitBlend > 0.5 ? 0.65 : 0.86);
       if (inView) {
         const r = clamp(p.k * (target.kind === "carrier" ? 57 : 12) + 4, 6, 38);
-        if (target !== g.lockTarget || !g.lockProgress) corners(ctx, p.x, p.y, r, amber);
-        if (target.kind === "carrier" && target.maxHp) {
+        const inSight = target === g.lockTarget ? lockInSight : g.terrainVisible(cam, target);
+        if (!inSight) {
+          const text = "BEHIND RIDGE", margin = typeWidth(text) / 2 + 3;
+          corners(ctx, p.x, p.y, 6, amber);
+          cockpitPlate(ctx, text, clamp(p.x, margin, w - margin), p.y - 17, amber, "#3e3535");
+        } else if (target !== g.lockTarget || !g.lockProgress) corners(ctx, p.x, p.y, r, amber);
+        if (inSight && target.kind === "carrier" && target.maxHp) {
           const x = Math.round(p.x - 18),
             y = Math.round(p.y + r + 5);
           ctx.fillStyle = dark;
@@ -1308,7 +1304,7 @@
         cockpitPlate(ctx, text, clamp(x, margin, w - margin), y + (Math.abs(dy) > .45 ? -15 : 8), "#ffdf9a", "#3e3535");
       }
     }
-    if (lead && visible(g, cam, g.lockTarget)) {
+    if (lead && lockInSight) {
       const point = project(lead.x, lead.y, lead.z);
       const contact = project(g.lockTarget.x, g.lockTarget.y, g.lockTarget.z);
       const bottom = h * (g.cockpitBlend > .5 ? .65 : .95);
@@ -1324,7 +1320,7 @@
         }
       }
     }
-    if (g.lockTarget && g.lockProgress > 0) {
+    if (lockInSight && g.lockProgress > 0) {
       const t = g.lockTarget,
         p = project(t.x, t.y, t.z);
       if (!p || p.x < 8 || p.x > w - 8 || p.y < 12 || p.y > h * (g.cockpitBlend > .5 ? .65 : .91)) return;
@@ -1896,11 +1892,11 @@
     const objects = [];
     for (const e of g.enemies) {
       const a = project(e.x, e.y, e.z);
-      if (inScreen(a, 80) && visible(g, cam, e)) objects.push({ type: "enemy", e, a, d: a.d });
+      if (inScreen(a, 80) && g.terrainVisible(cam, e)) objects.push({ type: "enemy", e, a, d: a.d });
     }
     for (const e of g.allies || []) {
       const a = project(e.x, e.y, e.z);
-      if (inScreen(a, 60) && visible(g, cam, e)) objects.push({ type: "ally", e, a, d: a.d });
+      if (inScreen(a, 60) && g.terrainVisible(cam, e)) objects.push({ type: "ally", e, a, d: a.d });
     }
     for (const s of g.shots) {
       const a = project(s.x, s.y, s.z);
@@ -1916,7 +1912,7 @@
     }
     if (g.pickup) {
       const e = g.pickup, a = project(e.x, e.y, e.z);
-      if (inScreen(a, 65) && visible(g, cam, e)) objects.push({ type: "pickup", e, a, d: a.d });
+      if (inScreen(a, 65) && g.terrainVisible(cam, e)) objects.push({ type: "pickup", e, a, d: a.d });
     }
     const pp = project(p.x, p.y, p.z);
     if (pp && blend < 0.52 && p.hull > 0) objects.push({ type: "player", e: p, a: pp, d: pp.d });
