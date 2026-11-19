@@ -17,13 +17,14 @@
     <script defer src="upgrades.js"></script>
     <script defer src="hangar.js"></script>
     <script defer src="deck.js"></script>
+    <script defer src="bindings.js"></script>
     <script defer src="main.js"></script>
   </head>
   <body>
     <main id="stage" aria-label="Patrol fighter jet game">
       <canvas id="world" aria-hidden="true"></canvas><canvas id="art" aria-hidden="true"></canvas>
       <div id="shade"></div>
-      <button id="pause" type="button" hidden title="Pause and release mouse (Esc or P)">Ⅱ Pause</button>
+      <button id="pause" type="button" hidden aria-label="Pause" title="Pause"><span aria-hidden="true"></span></button>
       <section id="home" aria-label="Start patrol">
         <h1 aria-label="Patrol">
           <canvas id="wordmark" width="200" height="42" aria-hidden="true"></canvas>
@@ -59,12 +60,7 @@
         <div id="deckChoices"></div>
       </dialog>
       <div id="flight" hidden>
-        <div id="mission">
-          <div id="wave"></div>
-          <strong id="missionTitle"></strong><span id="objective"></span><small id="bonus"></small>
-        </div>
         <div id="flightStatus">
-          <button id="viewName" type="button" title="Change camera view (Space)"></button>
           <div class="readouts">
             <span id="missileCount"></span>
             <div id="meters">
@@ -84,10 +80,16 @@
           <div class="eyebrow" id="modalKicker"></div>
           <h2 id="modalTitle"></h2>
           <p id="modalText"></p>
+          <div id="pauseTabs" role="tablist" aria-label="Pause menu" hidden>
+            <button type="button" role="tab" id="tabEquipment" aria-controls="equipmentPanel" aria-selected="true">Equipment</button>
+            <button type="button" role="tab" id="tabWave" aria-controls="wavePanel" aria-selected="false" tabindex="-1">Wave</button>
+            <button type="button" role="tab" id="tabControls" aria-controls="controlsPanel" aria-selected="false" tabindex="-1">Controls</button>
+            <button type="button" role="tab" id="tabSettings" aria-controls="settingsPanel" aria-selected="false" tabindex="-1">Settings</button>
+          </div>
           <div id="pauseDetails" hidden>
-            <section class="pause-card equipment">
+            <section class="pause-card equipment" role="tabpanel" id="equipmentPanel" aria-labelledby="tabEquipment" tabindex="0">
               <div class="pause-heading">
-                <h3>Equipment</h3>
+                <h3>Aircraft loadout</h3>
                 <span id="pilotLevel"></span>
               </div>
               <ul id="weapons" class="loadout-grid" aria-label="Weapons"></ul>
@@ -100,88 +102,65 @@
                 <ul id="installedParts" class="loadout-grid"></ul>
               </div>
             </section>
-            <section class="pause-card mix">
-              <h3>Audio</h3>
-              <div class="volume-row">
-                <label for="musicVolume">Music</label><output id="musicPercent" for="musicVolume">100%</output>
-                <input id="musicVolume" type="range" min="0" max="100" value="100" />
-              </div>
-              <div class="volume-row">
-                <label for="effectsVolume">Sound effects</label><output id="effectsPercent" for="effectsVolume">100%</output>
-                <input id="effectsVolume" type="range" min="0" max="100" value="100" />
-              </div>
-              <div class="pause-tools">
-                <button id="audio" title="Toggle all game audio" aria-pressed="true"><span id="audioIcon">♪</span> Sound on</button>
-                <button id="music" title="Toggle the flight soundtrack" aria-pressed="true">Music on</button>
-              </div>
+            <section class="pause-card" role="tabpanel" id="wavePanel" aria-labelledby="tabWave" tabindex="0" hidden>
+              <span id="wave"></span>
+              <h3 id="missionTitle"></h3>
+              <dl class="wave-brief">
+                <div><dt>Objective</dt><dd id="objective"></dd></div>
+                <div id="bonusObjective"><dt>Bonus objective</dt><dd id="bonus"></dd></div>
+              </dl>
             </section>
-            <section class="pause-card controls">
-              <h3>Flight controls</h3>
-              <div class="flight-preferences">
-                <div class="volume-row mouse-preference">
-                  <label for="sensitivity">Mouse sensitivity</label><output id="sensitivityValue" for="sensitivity">100%</output>
-                  <input id="sensitivity" type="range" min="50" max="200" step="5" value="100" />
+            <section class="pause-card" role="tabpanel" id="controlsPanel" aria-labelledby="tabControls" tabindex="0" hidden>
+              <div class="steering-settings">
+                <h3>Steering</h3>
+                <div class="flight-preferences">
+                  <div class="volume-row mouse-preference">
+                    <label for="sensitivity">Mouse sensitivity</label><output id="sensitivityValue" for="sensitivity">100%</output>
+                    <input id="sensitivity" type="range" min="50" max="200" step="5" value="100" />
+                  </div>
+                  <label><input type="checkbox" id="invertPitch" /> Invert pitch</label>
+                  <label class="capture-setting" id="captureSetting" hidden>
+                    <input id="captureMouse" type="checkbox" checked /> Keep mouse inside game
+                  </label>
+                  <label class="touch-preference"><input type="checkbox" id="leftHanded" /> Left-handed touch controls</label>
                 </div>
+                <ul class="touch-guide">
+                  <li><b>Steer</b> with the <span id="stickSide">left</span> stick.</li>
+                  <li><b>Hold <span id="touchPrimaryHint">Cannon</span>.</b> Slide onto Missile to fire both.</li>
+                  <li><b>Hold</b> Boost or Brake. <b>Tap</b> Roll to evade.</li>
+                  <li>Change your current camera in <b>Settings</b>.</li>
+                </ul>
+              </div>
+              <div id="bindingEditor"></div>
+            </section>
+            <section class="pause-card" role="tabpanel" id="settingsPanel" aria-labelledby="tabSettings" tabindex="0" hidden>
+              <div class="flight-preferences">
+                <h3>Flight display</h3>
+                <label class="camera-preference" for="currentView">Current camera
+                  <select id="currentView"><option value="chase">Chase cam</option><option value="cockpit">Cockpit</option><option value="north">North-up</option></select>
+                </label>
                 <label class="camera-preference" for="startingView">Starting camera
                   <select id="startingView"><option value="chase">Chase cam</option><option value="cockpit">Cockpit</option><option value="north">North-up</option></select>
                 </label>
-                <label><input type="checkbox" id="invertPitch" /> Invert pitch</label>
                 <label><input type="checkbox" id="showLead" checked /> Show gun lead indicator</label>
-                <label class="touch-preference"><input type="checkbox" id="leftHanded" /> Left-handed touch controls</label>
+                <div class="pause-tools">
+                  <button id="fullscreen" hidden title="Enter fullscreen" aria-label="Enter fullscreen" aria-pressed="false">⛶ Fullscreen</button>
+                </div>
               </div>
-              <dl class="bindings">
-                <div>
-                  <dt>Steer</dt>
-                  <dd>Mouse</dd>
+              <div class="mix">
+                <h3>Audio</h3>
+                <div class="volume-row">
+                  <label for="musicVolume">Music</label><output id="musicPercent" for="musicVolume">100%</output>
+                  <input id="musicVolume" type="range" min="0" max="100" value="100" />
                 </div>
-                <div>
-                  <dt>Fire <span id="controlPrimary">pulse cannon</span></dt>
-                  <dd>Left click</dd>
+                <div class="volume-row">
+                  <label for="effectsVolume">Sound effects</label><output id="effectsPercent" for="effectsVolume">100%</output>
+                  <input id="effectsVolume" type="range" min="0" max="100" value="100" />
                 </div>
-                <div>
-                  <dt>Launch missile</dt>
-                  <dd>Right click / F</dd>
+                <div class="pause-tools">
+                  <button id="audio" title="Toggle all game audio" aria-pressed="true"><span id="audioIcon">♪</span> Sound on</button>
+                  <button id="music" title="Toggle the flight soundtrack" aria-pressed="true">Music on</button>
                 </div>
-                <div>
-                  <dt>Afterburner</dt>
-                  <dd>Hold Shift</dd>
-                </div>
-                <div>
-                  <dt>Airbrake</dt>
-                  <dd>Hold S</dd>
-                </div>
-                <div>
-                  <dt>Barrel roll</dt>
-                  <dd>Q / E</dd>
-                </div>
-                <div>
-                  <dt>Change view</dt>
-                  <dd>Space</dd>
-                </div>
-                <div>
-                  <dt>Pause / resume</dt>
-                  <dd>Esc / P</dd>
-                </div>
-              </dl>
-              <label class="capture-setting" id="captureSetting" hidden>
-                <input id="captureMouse" type="checkbox" checked /> Keep mouse inside game
-              </label>
-              <ul class="touch-guide">
-                <li><b>Steer</b> with the <span id="stickSide">left</span> stick.</li>
-                <li><b>Hold <span id="touchPrimaryHint">Cannon</span>.</b> Slide onto Missile to fire both.</li>
-                <li><b>Hold</b> Boost or Brake. <b>Tap</b> Roll to evade.</li>
-                <li><b>Tap the camera name</b> to change views.</li>
-              </ul>
-              <div class="pause-tools">
-              <button
-                id="fullscreen"
-                hidden
-                title="Enter fullscreen"
-                aria-label="Enter fullscreen"
-                aria-pressed="false"
-              >
-                ⛶ Fullscreen
-              </button>
               </div>
             </section>
           </div>

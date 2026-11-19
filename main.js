@@ -14,7 +14,6 @@ const patrol = (() => {
     missile: false,
     roll: 0,
   };
-  const viewNames = ["Chase cam", "Cockpit", "North-up"];
   const durations = document.querySelectorAll("[data-duration]");
   const glyphs = {
     P: ["111110", "110011", "110011", "111110", "110000", "110000", "110000"],
@@ -80,7 +79,9 @@ const patrol = (() => {
   let carry = 0;
   const coarse = matchMedia("(pointer:coarse)");
   const contacts = new Map();
-  const desktopHeld = { fire: false, brake: false, boost: false };
+  const desktopHeld = new Map();
+  const heldActions = ["fire", "brake", "boost"];
+  const bindings = PatrolBindings.create($("bindingEditor"));
   let firePressed = false;
   const stick = $("stick");
   let stickId = null, touchMode = coarse.matches;
@@ -116,7 +117,8 @@ const patrol = (() => {
     if (g) g.showGunLead = $("showLead").checked;
   }
   applyFlightSettings();
-  document.querySelector(".flight-preferences").addEventListener("input", () => {
+  $("pauseDetails").addEventListener("input", event => {
+    if (!event.target.closest(".flight-preferences")) return;
     applyFlightSettings();
     try {
       localStorage.setItem(flightSettingsKey, JSON.stringify({
@@ -151,7 +153,6 @@ const patrol = (() => {
     const locked = document.pointerLockElement === stage;
     const released = hadMouseLock && !locked;
     hadMouseLock = locked;
-    $("pause").textContent = locked ? "Ⅱ Pause · P" : "Ⅱ Pause";
     if (locked) {
       lockHintShown = false;
       if (!active() || touchMode) releaseFlightMouse();
@@ -161,9 +162,10 @@ const patrol = (() => {
   });
 
   function refreshHeldActions() {
-    for (const key of ["fire", "brake", "boost"]) input[key] = desktopHeld[key];
+    for (const key of heldActions) input[key] = false;
+    for (const action of desktopHeld.values()) input[action] = true;
     for (const { key } of contacts.values()) {
-      if (Object.hasOwn(desktopHeld, key)) input[key] = true;
+      if (heldActions.includes(key)) input[key] = true;
     }
   }
   function releaseContact(id) {
@@ -193,7 +195,8 @@ const patrol = (() => {
 
   function clearInput() {
     releaseTouches();
-    firePressed = desktopHeld.fire = desktopHeld.brake = desktopHeld.boost = false;
+    desktopHeld.clear();
+    firePressed = false;
     Object.assign(input, {
       moved: false,
       x: 0,
@@ -362,10 +365,10 @@ const patrol = (() => {
     lastCam = c;
     return c;
   }
-  function changeView() {
-    if (!active()) return;
-    transition = { t: time, from: lastCam, cb: g.cockpitBlend || 0 };
-    view = (view + 1) % 3;
+  function changeView(next = (view + 1) % cameraIds.length) {
+    if (g?.state !== "playing" || next === view) return;
+    transition = !paused && lastCam ? { t: time, from: lastCam, cb: g.cockpitBlend || 0 } : null;
+    view = next;
     g.view = view;
     if (stickId === null) {
       input.x = input.y = 0;
@@ -688,7 +691,6 @@ const patrol = (() => {
   } catch { /* Keep the selection in memory when storage is unavailable. */ }
   function previewAirframe() {
     const frame = PatrolGame.airframes[airframePick.value];
-    $("controlPrimary").textContent = frame.weapon.toLowerCase();
     $("touchPrimaryHint").textContent = frame.trigger;
     document.querySelector('[data-control="fire"]').textContent = frame.trigger;
     if (g?.state === "title") {
@@ -740,7 +742,7 @@ const patrol = (() => {
     sync();
   }
   $("pause").onclick = pause;
-  $("viewName").onclick = changeView;
+  $("currentView").onchange = () => changeView(cameraIds.indexOf($("currentView").value));
   function flightDeck() {
     clearInput();
     g = PatrolGame.create(world, notify);
@@ -766,6 +768,33 @@ const patrol = (() => {
     row.append(PatrolUpgrades.icon(icon, 56), text);
     return row;
   }
+  const pauseTabs = [...$("pauseTabs").querySelectorAll('[role="tab"]')];
+  function selectPauseTab(tab) {
+    bindings.cancel();
+    for (const item of pauseTabs) {
+      const current = item === tab;
+      item.tabIndex = current ? 0 : -1;
+      item.setAttribute("aria-selected", String(current));
+      $(item.getAttribute("aria-controls")).hidden = !current;
+    }
+    $("pauseDetails").scrollTop = 0;
+  }
+  for (const [index, tab] of pauseTabs.entries()) {
+    tab.addEventListener("click", () => selectPauseTab(tab));
+    tab.addEventListener("keydown", event => {
+      const last = pauseTabs.length - 1;
+      const destinations = {
+        ArrowLeft: (index + last) % pauseTabs.length, ArrowRight: (index + 1) % pauseTabs.length,
+        Home: 0, End: last,
+      };
+      if (!Object.hasOwn(destinations, event.key)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const next = pauseTabs[destinations[event.key]];
+      selectPauseTab(next);
+      next.focus({ preventScroll: true });
+    });
+  }
   function showEquipment() {
     const frame = g.player.frame;
     const primaryIcon = { needle: "arc", manta: "salvo" }[frame?.id] || "cannon";
@@ -785,7 +814,6 @@ const patrol = (() => {
       ...parts.map(part => equipmentCard(part.icon || part.id, part.name, "Rank " + g.mods[part.id])),
       ...perks.map(perk => equipmentCard(perk.icon || perk.id, perk.name, "Fleet · " + g.charges[perk.id] + " left")),
     );
-    $("pauseDetails").scrollTop = 0;
   }
   function renderDraft(detail, banishing = false, celebrate = true) {
     const tools = $("draftTools"), actions = $("actions");
@@ -833,16 +861,7 @@ const patrol = (() => {
     document.body.classList.toggle("cockpit", !home && view === 1);
     const p = g.player;
     if (!home) {
-      $("viewName").textContent = viewNames[view];
       $("missileCount").textContent = "Missiles " + p.missiles + "/4";
-      $("wave").textContent =
-        (g.wave > g.waveCount ? "Endless" : "Wave") +
-        " " +
-        g.wave +
-        (g.wave <= g.waveCount ? " / " + g.waveCount : "");
-      $("missionTitle").textContent = g.missionTitle || "";
-      $("objective").textContent = g.objective || "";
-      $("bonus").textContent = g.bonus ? "Bonus · " + g.bonus : "";
       $("shield").max = p.frame.maxShield;
       $("hull").max = p.frame.maxHull;
       $("shield").value = p.shield;
@@ -856,7 +875,8 @@ const patrol = (() => {
     const modal = $("modal");
     modal.classList.toggle("upgrade-draft", phase === "draft");
     modal.classList.toggle("pause-menu", phase === "paused");
-    $("pauseDetails").hidden = $("pauseRegion").hidden = phase !== "paused";
+    $("pauseTabs").hidden = $("pauseDetails").hidden = $("pauseRegion").hidden = phase !== "paused";
+    if (phase !== "paused") bindings.cancel();
     const debrief = ["won", "dead", "retired", "finished"].includes(phase);
     modal.classList.toggle("debrief", debrief);
     $("earnings").hidden = !debrief;
@@ -891,9 +911,15 @@ const patrol = (() => {
         sync();
       }, null, true), button("End patrol", () => { g.finish(); sync(); }));
     } else if (phase === "paused") {
-      kicker = "Wave " + g.wave + " · " + g.missionTitle;
+      $("currentView").value = cameraIds[view];
       title = "Paused";
-      detail = touchMode && innerWidth > innerHeight && innerHeight <= 470 && g.bonus ? "Bonus · " + g.bonus : "";
+      kicker = detail = "";
+      $("wave").textContent = g.wave > g.waveCount ? "Endless · Wave " + g.wave : "Wave " + g.wave + " / " + g.waveCount;
+      $("missionTitle").textContent = g.missionTitle;
+      $("objective").textContent = g.objective;
+      $("bonus").textContent = g.bonus;
+      $("bonusObjective").hidden = !g.bonus;
+      selectPauseTab(pauseTabs[0]);
       showEquipment();
       actions.append(
         button("Resume", pause, null, true),
@@ -933,7 +959,7 @@ const patrol = (() => {
     $("modalKicker").textContent = kicker;
     $("modalTitle").textContent = title;
     $("modalText").textContent = detail;
-    actions.firstElementChild?.focus({ preventScroll: true });
+    (phase === "paused" ? pauseTabs[0] : actions.firstElementChild)?.focus({ preventScroll: true });
   }
   function steer(e) {
     if (!active() || e.pointerType === "touch" || document.pointerLockElement === stage) return;
@@ -965,41 +991,44 @@ const patrol = (() => {
     steer(e);
   });
   coarse.addEventListener("change", () => setTouchMode(coarse.matches));
-  $("stage").addEventListener("mousedown", (e) => {
-    if (!active() || touchMode || e.target.closest("button,#touch") || e.sourceCapabilities?.firesTouchEvents) return;
-    e.preventDefault();
-    steer(e);
-    captureFlightMouse();
-    if (e.button === 0) firePressed = desktopHeld.fire = input.fire = true;
-    if (e.button === 2) input.missile = true;
-  });
-  window.addEventListener("mouseup", (e) => {
-    if (e.button === 0 && !e.sourceCapabilities?.firesTouchEvents) {
-      desktopHeld.fire = false;
+  function pressDesktop(action, code) {
+    if (action === "pause") { pause(); return; }
+    if (heldActions.includes(action)) {
+      desktopHeld.set(code, action);
+      if (action === "fire") firePressed = true;
       refreshHeldActions();
-    }
-  });
-  $("stage").addEventListener("contextmenu", (e) => e.preventDefault());
-  window.addEventListener("keydown", (e) => {
-    if (hangar.open || recovery.open) return;
-    if ((e.code === "Escape" || e.code === "KeyP") && !e.repeat) {
-      pause();
+    } else if (action === "missile") input.missile = true;
+    else if (action === "view") changeView();
+    else if (action === "rollLeft" || action === "rollRight") input.roll = action === "rollLeft" ? -1 : 1;
+  }
+  function releaseDesktop(code) {
+    if (desktopHeld.delete(code)) refreshHeldActions();
+  }
+  stage.addEventListener("mousedown", event => {
+    if (touchMode || event.sourceCapabilities?.firesTouchEvents || event.target.closest("button,input,select,label,#touch,dialog,#bindingEditor")) return;
+    const code = "Mouse" + event.button, action = bindings.owner(code);
+    if (!active()) {
+      if (paused && !recovery.open && action === "pause") { event.preventDefault(); pause(); }
       return;
     }
-    if (!active()) return;
-    if (["Space", "ShiftLeft", "ShiftRight", "KeyF", "KeyQ", "KeyE", "KeyS"].includes(e.code)) e.preventDefault();
-    if (e.code.startsWith("Shift")) desktopHeld.boost = input.boost = true;
-    if (e.code === "KeyS") desktopHeld.brake = input.brake = true;
-    if (e.repeat) return;
-    if (e.code === "Space") changeView();
-    if (e.code === "KeyF") input.missile = true;
-    if (e.code === "KeyQ" || e.code === "KeyE") input.roll = e.code === "KeyQ" ? -1 : 1;
+    event.preventDefault();
+    steer(event);
+    if (action !== "pause") captureFlightMouse();
+    if (action) pressDesktop(action, code);
   });
-  window.addEventListener("keyup", (e) => {
-    if (e.code === "KeyS") desktopHeld.brake = false;
-    if (e.code.startsWith("Shift")) desktopHeld.boost = e.shiftKey;
-    refreshHeldActions();
+  window.addEventListener("mouseup", event => releaseDesktop("Mouse" + event.button));
+  stage.addEventListener("contextmenu", event => event.preventDefault());
+  window.addEventListener("keydown", event => {
+    if (event.defaultPrevented || hangar.open || recovery.open || bindings.capture(event)) return;
+    if (event.repeat || event.ctrlKey || event.metaKey || event.altKey) return;
+    const action = event.code === "Escape" ? "pause" : bindings.owner(event.code);
+    if (!action || (!active() && !(paused && action === "pause"))) return;
+    if (paused && event.code !== "Escape" &&
+        (event.target.closest("input,select,textarea") || (event.code === "Space" && event.target.closest("button")))) return;
+    event.preventDefault();
+    pressDesktop(action, event.code);
   });
+  window.addEventListener("keyup", event => releaseDesktop(event.code));
   window.addEventListener("blur", () => {
     if (active()) pause();
     clearInput();

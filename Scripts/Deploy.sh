@@ -8,7 +8,7 @@ case "${1:-}" in
   *) echo "Usage: Scripts/Deploy.sh [--live]" >&2; exit 2 ;;
 esac
 
-assets=(art.js audio.js deck.js deck.css game.js hangar.js main.js upgrades.js world.js patrol.css upgrades.css
+assets=(art.js audio.js bindings.js deck.js deck.css game.js hangar.js main.js upgrades.js world.js patrol.css upgrades.css
         patrol.png favicon.png apple-touch-icon.png)
 for file in "${assets[@]}" index.html; do
   [[ -f "$file" ]] || { echo "Missing release file: $file" >&2; exit 1; }

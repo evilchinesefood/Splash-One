@@ -84,8 +84,6 @@ body.flying #shade {
   height: 30px;
   image-rendering: pixelated;
 }
-#pause,
-#viewName,
 .pause-tools button {
   padding: 7px 11px;
   background: transparent;
@@ -96,8 +94,6 @@ body.flying #shade {
     Menlo,
     monospace;
 }
-#pause:hover,
-#viewName:hover,
 .pause-tools button:hover {
   background: #4e3943;
 }
@@ -190,41 +186,19 @@ button.primary:hover,
   bottom: 0;
   left: 0;
 }
-#pause, #viewName { background: #252030df; }
-#viewName { pointer-events: auto; width: 12ch; color: #ffd59e; white-space: nowrap; }
+#pause { display: grid; place-items: center; width: 30px; height: 30px; padding: 0; background: transparent; border: 0; }
+#pause[hidden] { display: none; }
+#pause span {
+  display: grid; place-items: center; width: 28px; height: 28px; box-sizing: border-box;
+  background: #252030df; border: 1px solid #aa9390; border-radius: 3px;
+}
+#pause span::before { content: ""; width: 10px; height: 12px; box-sizing: border-box; border-inline: 3px solid #ffe6c1; }
+#pause:hover span, #pause:focus-visible span { background: #4e3943; border-color: #ffcb94; }
 #flight {
   position: absolute;
   inset: 0;
   pointer-events: none;
   text-shadow: 1px 2px 1px #241c2d;
-}
-#mission {
-  position: absolute;
-  top: max(10px, env(safe-area-inset-top));
-  left: clamp(12px, 3.3vw, 64px);
-  display: grid;
-  gap: 4px;
-  background: #252030c9;
-  padding: 10px 14px;
-  border-left: 3px solid var(--peach);
-  max-width: min(420px, 62vw);
-}
-#wave,
-#bonus {
-  color: #ffd096;
-}
-#missionTitle {
-  font-size: 19px;
-}
-#objective,
-#bonus {
-  font:
-    12px/1.35 ui-monospace,
-    Menlo,
-    monospace;
-}
-#bonus:empty {
-  display: none;
 }
 #flightStatus {
   position: absolute;
@@ -425,17 +399,7 @@ body.touch-active {
     left: 6%;
     width: min(420px, 85vw);
   }
-  #mission {
-    padding: 6px 9px;
-    max-width: 67vw;
-  }
-  #missionTitle {
-    font-size: 16px;
-  }
-  #objective,
-  #bonus {
-    font-size: 10px;
-  }
+
 }
 @media (max-height: 550px) {
   #home {
@@ -467,7 +431,7 @@ body.touch-active {
 body.steering #stage {
   cursor: none;
 }
-body.cockpit #meters {
+body.cockpit #flightStatus {
   display: none;
 }
 
@@ -478,37 +442,43 @@ body.cockpit #meters {
 }
 
 .pause-menu .panel {
-  width: min(900px, 100%);
+  width: min(720px, 100%);
+  height: min(540px, 100%);
   max-height: 100%;
   overflow: hidden;
   display: grid;
-  grid-template: "region region" auto "title wave" auto "bonus bonus" auto "details details" minmax(0, 1fr) "actions actions" auto / auto 1fr;
-  padding: clamp(14px, 2.8vw, 28px);
+  grid-template: "title region" auto "tabs tabs" auto "details details" minmax(0, 1fr) "actions actions" auto / auto 1fr;
+  padding: clamp(12px, 2.4vw, 24px);
   color: #fff1db;
   background: #28242f;
   border: 1px solid #ad9290;
   border-top: 4px solid #ffb67f;
 }
-.pause-menu #pauseRegion { grid-area: region; margin: 0 0 6px; color: #dfcfc9; }
+.pause-menu #pauseRegion { grid-area: region; justify-self: end; align-self: center; margin: 0; color: #dfcfc9; }
 .pause-menu #modalTitle { grid-area: title; margin: 0; }
-.pause-menu #modalKicker {
-  grid-area: wave;
-  align-self: end;
-  justify-self: end;
-  text-align: right;
-  margin: 0 0 4px 12px;
-  font-size: 12px;
-  line-height: 1.4;
+.pause-menu :is(#modalKicker, #modalText) { display: none; }
+#pauseTabs {
+  grid-area: tabs;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border-block-end: 1px solid #79676f;
+  margin-block: 16px 10px;
 }
-.pause-menu #modalText { grid-area: bonus; margin: 5px 0 0; font-size: 14px; }
-.pause-menu #modalText:empty { display: none; }
+#pauseTabs button {
+  min-width: 0;
+  padding: 10px 2px;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: #d3c6c6;
+  font: 650 clamp(12px, 1.75vw, 16px)/1.2 system-ui, sans-serif;
+}
+#pauseTabs button[aria-selected="true"] { background: #433741; border-bottom-color: var(--peach); color: #ffe1b5; }
+#pauseTabs button:hover { color: #fff1db; background: #39303b; }
+#pauseTabs button:focus-visible, .pause-card:focus-visible { outline: 2px solid #ffe0ad; outline-offset: -2px; }
 #pauseDetails {
   grid-area: details;
-  display: grid;
-  grid-template: "equipment equipment" auto "audio controls" auto / 1fr 1fr;
-  align-content: start;
-  gap: 12px;
-  margin: 15px 0;
   min-height: 0;
   overflow: auto;
   overscroll-behavior: contain;
@@ -516,14 +486,26 @@ body.cockpit #meters {
 }
 .pause-card {
   min-width: 0;
-  padding: 15px 16px;
+  padding: 16px 18px;
   border: 1px solid #675662;
   background: #35303d;
 }
-.pause-card.equipment { grid-area: equipment; }
-.pause-card.mix { grid-area: audio; }
-.pause-card.controls { grid-area: controls; }
 #pauseDetails h3 { margin: 0; font-size: 17px; line-height: 1.25; }
+#wavePanel #wave { color: #ffd199; font: 700 13px/1.5 ui-monospace, Menlo, monospace; }
+#wavePanel #missionTitle { margin: 4px 0 13px; color: #fff0d9; font-size: clamp(20px, 3vw, 30px); }
+.wave-brief { margin: 0; }
+.wave-brief div { border-top: 1px solid #61545f; padding: 10px 0 4px; }
+.wave-brief div + div { margin-top: 8px; }
+.wave-brief dt { color: #d5b9ac; font: 700 12px/1.4 ui-monospace, Menlo, monospace; }
+.wave-brief dd { margin: 3px 0 0; font: 500 16px/1.45 system-ui, sans-serif; color: #fff0db; }
+@media (min-width: 650px) {
+  #controlsPanel { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); gap: 18px; }
+  #controlsPanel .steering-settings { padding-right: 16px; border-right: 1px solid #61545f; }
+  #controlsPanel .flight-preferences { border-bottom: 0; }
+}
+#settingsPanel { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; }
+#settingsPanel .flight-preferences { margin: 0; padding: 0; border: 0; }
+#settingsPanel .flight-preferences h3 { margin-bottom: 8px; }
 .pause-heading {
   display: flex;
   justify-content: space-between;
@@ -624,22 +606,6 @@ body.cockpit #meters {
 .touch-active.left-handed #stick { left: auto; right: var(--edge-right); }
 .touch-active.left-handed .pad { right: auto; left: var(--edge-left); direction: rtl; }
 .touch-active.left-handed .pad button { direction: ltr; }
-.bindings { margin: 6px 0 10px; }
-.bindings div {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 6px 0;
-  border-bottom: 1px solid #5c505f;
-  font-size: 15px;
-}
-.bindings dd {
-  margin: 0;
-  text-align: right;
-  color: #f4d5ab;
-  font: 600 13px/1.35 ui-monospace, Menlo, monospace;
-}
 .capture-setting {
   display: flex;
   align-items: center;
@@ -649,14 +615,15 @@ body.cockpit #meters {
   cursor: pointer;
 }
 .capture-setting input { width: 17px; height: 17px; accent-color: var(--peach); }
-.touch-active .capture-setting, .touch-guide { display: none; }
+.touch-active .flight-preferences > .capture-setting, .touch-guide { display: none; }
 .touch-active .touch-guide { display: grid; gap: 7px; padding: 0; margin: 9px 0; list-style: none; font-size: 15px; line-height: 1.4; }
-.touch-active .bindings { display: none; }
+
 .pause-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; }
 .pause-tools button { min-height: 34px; color: #ffe4c6; background: #292430; }
 .pause-tools button[aria-pressed="false"]:is(#audio,#music) { color: #ddcfd2; border-style: dashed; }
 .pause-menu #actions {
   grid-area: actions;
+  margin-top: 9px;
   display: grid;
   grid-template-columns: 2fr 1fr;
   gap: 10px;
@@ -670,7 +637,9 @@ body.cockpit #meters {
   text-align: center;
 }
 @media (max-width: 620px) and (orientation: portrait) {
-  #pauseDetails { grid-template: "equipment" auto "audio" auto "controls" auto / 1fr; gap: 9px; }
+  #settingsPanel { grid-template-columns: 1fr; gap: 17px; }
+  .pause-menu #pauseRegion { max-width: 145px; font-size: 9px; }
+  #pauseTabs { margin-block: 10px 8px; }
   .pause-card { padding: 12px 14px; }
 }
 @media (max-height: 470px) {
@@ -678,18 +647,13 @@ body.cockpit #meters {
   .pause-menu #pauseRegion { margin: 0; gap: 6px; }
   .pause-menu .crest { width: 20px; height: 16px; }
   .pause-menu #modalTitle { font-size: 26px; }
-  .pause-menu #modalKicker { font-size: 10px; }
-  #pauseDetails { margin: 6px 0; gap: 8px; }
+  #pauseTabs { margin-block: 4px 6px; }
+  #pauseTabs button { padding-block: 7px; }
 
   .pause-card { padding: 10px; }
   .pause-menu #actions { padding-top: 6px; }
 }
-#viewName {
-  font:
-    600 11px ui-monospace,
-    Menlo,
-    monospace;
-}
+
 
 @media (orientation: portrait) and (max-height: 740px) {
   #home {
@@ -698,18 +662,11 @@ body.cockpit #meters {
 }
 
 /* Native menus can scroll; only the active flight surface traps drags. */
-.touch-active :is(#viewName, #pause),
+.touch-active #pause,
 .touch-active :is(.duration, .pause-tools) button,
 .touch-active :is(.deck-picks button, #launch, .action) {
   min-height: 44px;
   min-width: 44px;
-}
-.touch-active #mission {
-  top: max(8px, env(safe-area-inset-top));
-  left: var(--edge-left);
-  max-width: min(62vw, 340px);
-  padding: 5px 8px;
-  gap: 2px;
 }
 .touch-active #flightStatus {
   left: var(--edge-left);
@@ -756,21 +713,8 @@ body.cockpit #meters {
   }
   .touch-active #wordmark { width: 178px; }
   .touch-active .lede { font-size: 12px; line-height: 1.25; margin-block: 3px 6px; }
-  .touch-active #mission { max-width: 48vw; }
 }
 
-
-@media (orientation: landscape) and (max-height: 470px) {
-  .touch-active #mission {
-    grid-template-columns: auto 1fr;
-    align-items: baseline;
-    gap: 2px 6px;
-  }
-  .touch-active #missionTitle { font-size: 14px; }
-  .touch-active #objective { grid-column: 1 / -1; }
-  .touch-active #bonus { display: none; }
-
-}
 
 .deck-actions { display: flex; align-items: stretch; gap: 8px; flex-wrap: wrap; }
 .hangar-link {
@@ -1024,3 +968,17 @@ body.cockpit #meters {
   .finish-sample { aspect-ratio: 3.05; }
   .finish-sample canvas { width: 76%; }
 }
+
+#bindingEditor > p { margin: 8px 0; font-size: 13px; line-height: 1.4; color: #e4d1c1; }
+.binding-grid {
+  display: grid; grid-template-columns: minmax(82px, 1fr) repeat(2, minmax(0, 0.85fr));
+  align-items: center; gap: 5px 7px; margin: 10px 0;
+}
+.binding-grid > span { font-size: 14px; }
+.binding-grid button, .binding-reset {
+  min-width: 0; min-height: 34px; padding: 5px 6px;
+  color: #ffebd2; background: #312b36; border: 1px solid #7a6774; font-size: 13px;
+}
+.binding-grid button[aria-pressed="true"] { color: #261d20; background: #ffc295; border-color: #ffdab9; }
+.binding-reset { padding-inline: 10px; }
+#bindingEditor .binding-status { min-height: 1.4em; color: #ffcd9e; }
