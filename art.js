@@ -394,20 +394,20 @@
   const needleNozzle = { x: 0, y: 0, z: -10, width: 1.17, height: 0.95 };
   const mantaNozzle = { x: 4.3, y: 0.25, z: -8.5, width: 1.15, height: 0.73 };
 
-  function buildNeedle() {
+  function buildNeedle(body = ivory, trim = ionGlass, tip = ionGlass[2]) {
     const mesh = [];
     loft(mesh, [[-10,0,0,1.25,1],[-4,0,0,1.7,1.25],[5,0,0,1.12,.9],
-      [10,0,0,.58,.4],[14,0,.1,.08,.12]], ivory);
+      [10,0,0,.58,.4],[14,0,.1,.08,.12]], body);
     loft(mesh, [[.7,0,.8,.7,.12],[2.1,0,1,.95,.94],[5,0,.91,.65,.56],[7,0,.65,.17,.08]], ionGlass);
     for (const side of [-1, 1]) {
       const v = (x,y,z) => [side*x,y,z];
-      surface(mesh, [v(.85,0,4),v(6.8,-.15,-6.4),v(6.1,-.1,-8),v(1.1,.05,-5.2)], ivory[2]);
-      surface(mesh, [v(1.7,.12,1.4),v(6.45,0,-6.4),v(5.55,.08,-6.9),v(1.15,.15,-2)], ionGlass[2]);
-      surface(mesh, [v(.7,.15,8.2),v(3,.38,5.4),v(2.6,.2,4.9),v(.9,.17,6)], ivory[3]);
-      surface(mesh, [v(.6,.18,-4.6),v(2.55,.7,-9.1),v(1.45,.62,-9.8),v(.55,.33,-8.5)], ionGlass[2]);
+      surface(mesh, [v(.85,0,4),v(6.8,-.15,-6.4),v(6.1,-.1,-8),v(1.1,.05,-5.2)], body[2]);
+      surface(mesh, [v(1.7,.12,1.4),v(6.45,0,-6.4),v(5.55,.08,-6.9),v(1.15,.15,-2)], trim[2]);
+      surface(mesh, [v(.7,.15,8.2),v(3,.38,5.4),v(2.6,.2,4.9),v(.9,.17,6)], body[3]);
+      surface(mesh, [v(.6,.18,-4.6),v(2.55,.7,-9.1),v(1.45,.62,-9.8),v(.55,.33,-8.5)], tip);
     }
-    surface(mesh, [[0,.9,-2.7],[0,5.7,-8.5],[0,5.5,-9.4],[0,1.05,-8.6]], ivory[1]);
-    surface(mesh, [[0,4.9,-7.55],[0,5.7,-8.5],[0,5.5,-9.4],[0,4.7,-9.15]], ionGlass[2]);
+    surface(mesh, [[0,.9,-2.7],[0,5.7,-8.5],[0,5.5,-9.4],[0,1.05,-8.6]], body[1]);
+    surface(mesh, [[0,4.9,-7.55],[0,5.7,-8.5],[0,5.5,-9.4],[0,4.7,-9.15]], tip);
     // The interceptor's narrow swept wings carry their rails closer in and farther aft.
     const stores = wingStores.map(face => ({
       ...face, points: face.points.map(([x, y, z]) => [x * .72, y, z - 2.8]),
@@ -415,32 +415,46 @@
     return mesh.concat(stores);
   }
 
-  function buildManta() {
+  function buildManta(body = copper, trim = slate, tip = ivory[2]) {
     const mesh = [];
-    loft(mesh,[[-7,0,0,2.65,1.03],[-2,0,.2,3.1,1.65],[3.5,0,.22,2,1.2],[8,0,0,.3,.28]], copper);
+    loft(mesh,[[-7,0,0,2.65,1.03],[-2,0,.2,3.1,1.65],[3.5,0,.22,2,1.2],[8,0,0,.3,.28]], body);
     loft(mesh,[[-1.1,0,1.45,1.2,.2],[1.2,0,1.68,1.55,.9],[4.65,0,1.2,.6,.22]], night);
     for (const side of [-1, 1]) {
       const v = (x,y,z) => [side*x,y,z];
       surface(mesh,[v(1,.65,6.3),v(13.5,-.1,-4.8),v(12.6,.04,-7.25),v(7.7,.2,-5.9),
-        v(4.8,.25,-9.5),v(1.4,.6,-5.8)],copper[2]);
-      surface(mesh,[v(1.7,.72,5.45),v(12.7,.05,-4.85),v(9.5,.24,-4.15),v(4.2,.6,.5)],copper[3]);
+        v(4.8,.25,-9.5),v(1.4,.6,-5.8)],body[2]);
+      surface(mesh,[v(1.7,.72,5.45),v(12.7,.05,-4.85),v(9.5,.24,-4.15),v(4.2,.6,.5)],body[3]);
       surface(mesh,[v(6.2,.4,-2.3),v(12.3,.07,-5.1),v(12.5,.12,-6.4),v(7.9,.35,-4.3)],night[1]);
       loft(mesh,[[-8.5,side*4.3,.25,1.3,.9],[-4,side*4.3,.55,1.65,1.2],
-        [1.8,side*4.3,.56,1.1,.75],[2.4,side*4.3,.55,.97,.62]],slate);
-      surface(mesh,[v(4,.92,-3),v(6.25,3.2,-7.8),v(5.97,2.8,-9.5),v(4,1,-8)],copper[1]);
-      surface(mesh,[v(5.7,2.7,-6.85),v(6.25,3.2,-7.8),v(5.97,2.8,-9.5),v(5.67,2.5,-8.1)],ivory[2]);
+        [1.8,side*4.3,.56,1.1,.75],[2.4,side*4.3,.55,.97,.62]],trim);
+      surface(mesh,[v(4,.92,-3),v(6.25,3.2,-7.8),v(5.97,2.8,-9.5),v(4,1,-8)],body[1]);
+      surface(mesh,[v(5.7,2.7,-6.85),v(6.25,3.2,-7.8),v(5.97,2.8,-9.5),v(5.67,2.5,-8.1)],tip);
     }
     return mesh.concat(wingStores);
   }
   const playerModels = {
-    kestrel: {mesh:jetMesh, nozzle:jetNozzle},
-    needle: {mesh:buildNeedle(), nozzle:needleNozzle,
+    kestrel: {mesh:jetMesh, build:buildJet, nozzle:jetNozzle},
+    needle: {mesh:buildNeedle(), build:buildNeedle, nozzle:needleNozzle,
       shadow:[[0,14],[1,8],[3,5],[1.5,4],[6.8,-6.4],[6.1,-8],[1.5,-5.5],[2.5,-9.1],[0,-10],
         [-2.5,-9.1],[-1.5,-5.5],[-6.1,-8],[-6.8,-6.4],[-1.5,4],[-3,5],[-1,8]]},
-    manta: {mesh:buildManta(), nozzle:mantaNozzle,
+    manta: {mesh:buildManta(), build:buildManta, nozzle:mantaNozzle,
       shadow:[[0,8],[13.5,-4.8],[12.6,-7.25],[7.7,-5.9],[4.8,-9.5],[1.5,-7],[-1.5,-7],
         [-4.8,-9.5],[-7.7,-5.9],[-12.6,-7.25],[-13.5,-4.8]]},
   };
+  const paintSchemes = {
+    glacier: {body: ["#335663", "#4f9ab2", "#82d5dc", "#d3f4e9"],
+      trim: ["#253848", "#315e71", "#4b93a5", "#b4e5e5"], tip: "#fff8d4"},
+    crimson: {body: ["#582d41", "#a13c50", "#d44c59", "#ff9987"],
+      trim: ["#35283e", "#642d46", "#95404f", "#e47c71"], tip: "#ffd18a"},
+    midnight: {body: ["#252539", "#393b60", "#555b91", "#9e9dd0"],
+      trim: ["#262a3a", "#34344f", "#47496d", "#777ca8"], tip: "#d1ade8"},
+  };
+  function paintedMesh(model, paint) {
+    if (!Object.hasOwn(paintSchemes, paint)) return model.mesh;
+    model.finishes ??= {};
+    const { body, trim, tip } = paintSchemes[paint];
+    return model.finishes[paint] ??= model.build(body, trim, tip);
+  }
   function buildCrescent() {
     const mesh = [];
     for (const s of [-1, 1]) {
@@ -825,13 +839,24 @@
     ctx.globalAlpha = 1;
   }
 
+  const flameSchemes = {
+    stock: {length: 1, taper: .54, core: "#ffd89b", hot: "#fff8cb", middle: ["#ffd079", "#ffad5e"], tip: ["#fc925f", "#f77855"]},
+    ion: {length: 1.10, taper: .32, core: "#b0f8ff", hot: "#f2ffff", middle: ["#76eaff", "#43caff"], tip: ["#428ff1", "#486acf"]},
+    plasma: {length: .86, taper: .85, core: "#ffcbf5", hot: "#ffeffb", middle: ["#fc9ae6", "#ee70ee"], tip: ["#bd55e2", "#9253d7"]},
+    mint: {length: .98, taper: .66, core: "#c3ffe3", hot: "#f3ffdc", middle: ["#93fac6", "#56efae"], tip: ["#2ccc99", "#269e8c"]},
+  };
+  function aircraftMesh(id, look, time, boost) {
+    const model = playerModels[id];
+    const flame = Object.hasOwn(flameSchemes, look?.flame) ? flameSchemes[look.flame] : flameSchemes.stock;
+    return paintedMesh(model, look?.paint).concat(exhaustMesh(model.nozzle, time, boost, flame));
+  }
   // Share the engine outlets with the mesh. Each band sorts in depth with the
   // nozzle lip, fins and fuselage, including when the jet rolls toward the camera.
-  function exhaustMesh(nozzle, time, boost) {
+  function exhaustMesh(nozzle, time, boost, flame = flameSchemes.stock) {
     const faces = [];
     for (const side of nozzle.x === 0 ? [0] : [-1, 1]) {
       const flicker = 1 + 0.1 * Math.sin(time * 31 + side);
-      const length = nozzle.width * (boost ? 9 : 2.4) * flicker;
+      const length = nozzle.width * (boost ? 9 : 2.4) * flicker * flame.length;
       const x = side * nozzle.x;
       const ring = (distance, radius) => {
         const z = nozzle.z - 0.04 - distance * length;
@@ -844,13 +869,13 @@
       };
       const mouth = ring(0, 0.85);
       const bright = ring(0.27, boost ? 0.94 : 0.67);
-      const taper = ring(0.68, 0.54);
+      const taper = ring(0.68, flame.taper);
       const tip = [x, nozzle.y, nozzle.z - length];
       for (let i = 0; i < 4; i++) {
         const j = (i + 1) % 4;
-        surface(faces, [mouth[i], mouth[j], bright[j], bright[i]], boost ? "#fff8cb" : "#ffd89b", "exhaust");
-        surface(faces, [bright[i], bright[j], taper[j], taper[i]], i % 2 ? "#ffad5e" : "#ffd079", "exhaust");
-        surface(faces, [taper[i], taper[j], tip], i % 2 ? "#f77855" : "#fc925f", "exhaust");
+        surface(faces, [mouth[i], mouth[j], bright[j], bright[i]], boost ? flame.hot : flame.core, "exhaust");
+        surface(faces, [bright[i], bright[j], taper[j], taper[i]], flame.middle[i % 2], "exhaust");
+        surface(faces, [taper[i], taper[j], tip], flame.tip[i % 2], "exhaust");
       }
     }
     return faces;
@@ -1913,8 +1938,7 @@
         ctx.save();
         boostVibration(ctx, g);
         ctx.globalAlpha = 1 - saturate((blend - 0.12) / 0.4);
-        const model = playerModels[e.frame.id];
-        drawMesh(ctx, e, model.mesh.concat(exhaustMesh(model.nozzle, g.time, e.boost)), b, project, e.missiles, g.world.night);
+        drawMesh(ctx, e, aircraftMesh(e.frame.id, e.frame.look, g.time, e.boost), b, project, e.missiles, g.world.night);
         if (g.world.night || g.world.storm) nightLights(ctx,e,b,project,g.time);
         ctx.restore();
         continue;
@@ -1990,17 +2014,16 @@
     }
     ctx.restore();
   }
-  function aircraftPortrait(id) {
+  function aircraftPortrait(id, look) {
     const canvas = document.createElement("canvas");
     canvas.width = 144;
     canvas.height = 64;
     canvas.setAttribute("aria-hidden", "true");
     const ctx = canvas.getContext("2d");
-    const model = playerModels[id];
     const plane = {x: 0, y: 0, z: 0, yaw: 1.05};
-    const scale = id === "manta" ? 2.9 : 3.65;
-    const project = (x,y,z) => ({x: 72 + x * scale, y: 32 - (y * .71 + z * .70) * scale, d: z * .71 - y * .70});
-    drawMesh(ctx, plane, model.mesh, basis(plane), project, 4, false);
+    const scale = id === "manta" ? 2.9 : id === "needle" ? 3.2 : 3.65;
+    const project = (x,y,z) => ({x: 80 + x * scale, y: 31 - (y * .71 + z * .70) * scale, d: z * .71 - y * .70});
+    drawMesh(ctx, plane, aircraftMesh(id, look, .125, true), basis(plane), project, 4, false);
     return canvas;
   }
   window.PatrolArt = { draw, aircraftPortrait };

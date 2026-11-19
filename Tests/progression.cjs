@@ -135,3 +135,25 @@ test("a depleted draft still offers service and a declined reserve ends the patr
   assert.equal(game.state, "dead");
   assert.equal(game.respawn(), false);
 });
+
+test("a finish is bought once per aircraft, equipped separately and retained with older saves", async () => {
+  const { hangar } = patrol({ "patrol.career.v2": JSON.stringify({
+    credits: 120, ships: { needle: { speed: 2 } }, fleet: { reroll: 1 }
+  }) });
+  assert.equal(hangar.read().looks.needle.paint, "stock");
+  assert.equal(await hangar.equipFinish("fleet", "paint", "crimson"), false);
+  assert.equal(await hangar.equipFinish("needle", "flame", "crimson"), false);
+  await Promise.all([hangar.equipFinish("needle", "paint", "crimson"), hangar.equipFinish("needle", "paint", "crimson")]);
+  assert.equal(hangar.read().credits, 60);
+  assert.equal(await hangar.equipFinish("needle", "flame", "ion"), true);
+  assert.equal(await hangar.equipFinish("manta", "paint", "crimson"), false);
+  for (const paint of ["stock", "crimson"]) assert.equal(await hangar.equipFinish("needle", "paint", paint), true);
+  const profile = hangar.read();
+  assert.equal(profile.credits, 5);
+  assert.equal(profile.looks.needle.paint, "crimson");
+  assert.equal(profile.looks.needle.flame, "ion");
+  assert.equal(profile.looks.manta.paint, "stock");
+  assert.equal(profile.looks.manta.owned.paint.includes("crimson"), false);
+  assert.equal(profile.ships.needle.speed, 2);
+  assert.equal(profile.fleet.reroll, 1);
+});

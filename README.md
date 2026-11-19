@@ -6,7 +6,7 @@ Open `index.html` in a WebGL2 browser. The game runs directly from disk, includi
 
 ## Flight deck
 
-Open the Aircraft card on the flight deck to compare the three jets. Each card shows the aircraft, its primary weapon, and flight stats with your installed parts. Your browser remembers the selected jet. All three carry four lock-on missiles.
+Open the Aircraft card on the flight deck to compare the three jets. Each card shows the aircraft, its primary weapon, and flight stats with your installed parts. Your browser remembers the selected jet. All three carry four lock-on missiles. Click or tap outside the Hangar, Aircraft, Region, or Sky menu to return to the flight deck.
 
 | Aircraft | Cruise | Primary weapon | Flight characteristics |
 | --- | --- | --- | --- |
@@ -30,7 +30,7 @@ On a phone, put your left thumb on the stick and drag from where it lands. Small
 
 ## Regions
 
-Open the Region and Sky cards on the flight deck to choose a landscape and weather. Autumn Lake District has wooded islands and mountain lakes. Painted Mesa follows a turquoise river through terraced sandstone cliffs. Moonlight keeps each map’s terrain and adds stars, a crescent moon, cool reflections, and aircraft navigation lights. Storm brings low dark clouds, windblown rain, and a steel-blue cast to either region. To choose another region during a run, pause, select **End**, then return to the flight deck.
+Open the Region and Sky cards on the flight deck to choose a landscape and weather. Autumn Lake District has wooded islands and mountain lakes. Painted Mesa follows a turquoise river through terraced sandstone cliffs. Jade Isle has one forested volcanic island ringed by beaches and open ocean. Shore missions bring you back to the island if you have flown far out to sea. Moonlight keeps each map’s terrain and adds stars, a crescent moon, cool reflections, and aircraft navigation lights. Storm brings low dark clouds, windblown rain, and a steel-blue cast to every region. To choose another region during a run, pause, select **End**, then return to the flight deck.
 
 ## Patrols
 
@@ -56,6 +56,8 @@ Every patrol earns flight credits. Destroyed targets and completed missions add 
 
 Open the Hangar from the flight deck or debrief. All aircraft draw from one credit balance. Choose an aircraft tab to install parts for that jet. Engine speed, turning, maximum hull and shield, shield recharge, primary weapon damage and rate of fire, and missile reload each have three ranks costing 40, 95, and 175 credits. A signature weapon kit costs 65, 130, and 240 credits. Kestrel gains extra parallel rounds at intervals, Needle pierces additional targets, and Manta concentrates its three-shot spread.
 
+Choose **Paint & flame** on an aircraft’s tab to preview a finish, then select **Buy & equip** to spend credits. Glacier, Crimson, and Midnight paint cost 45, 60, and 75 credits. Ion blue, Plasma violet, and Mint exhaust cost 55, 70, and 85. Each aircraft keeps its own collection. You can mix paint and exhaust and switch between owned finishes for free.
+
 The Fleet tab sells perks for every aircraft. Each rank grants one use per patrol. Re-roll draws different upgrade cards and Banish removes one upgrade from future offers for the rest of the run. Banishing keeps previously equipped ranks and leaves your level-up choice available. Respawn offers a reserve aircraft on loss. Deploy it to continue the current mission with your upgrades, full hull, shield and missile rails, or end the patrol and collect your credits.
 
 | Fleet perk | Rank 1 | Rank 2 | Rank 3 |
@@ -69,7 +71,7 @@ Purchases apply on the next launch and persist in this browser. Existing players
 ## Where to extend it
 
 - `game.js` owns simulation and run state. The `encounters`, `gear`, and `models` tables hold mission groups, upgrade levels, and enemy stats. Add behavior alongside the corresponding flight, weapon, or enemy update.
-- `world.js` generates tiled terrain and clouds in a worker. Its WebGL2 renderer and CPU height queries share the terrain map.
+- `world.js` generates terrain and clouds in a worker. Its WebGL2 renderer and CPU height queries share the terrain map.
 - `art.js` draws projected aircraft, weapon effects, targeting cues, and cockpit instruments from simulation state.
 - `upgrades.js` and `upgrades.css` draw equipment icons and the between-wave upgrade cards.
 - `hangar.js` stores the credit balance and permanent parts, prices purchases, and calculates run payouts.

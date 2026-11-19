@@ -875,7 +875,7 @@ body.cockpit #meters {
 .hangar-footer form { margin: 0; }
 .hangar-footer button { min-width: 84px; min-height: 38px; padding: 6px 12px; text-align: center; }
 @media (max-width: 680px) {
-  #hangar { width: calc(100% - 14px); max-height: calc(100dvh - 14px); }
+  #hangar { width: calc(100% - 32px); max-height: calc(100dvh - 24px); }
   .hangar-heading { padding: 12px 12px 8px; }
   #workbenches { padding: 0 10px 8px; }
   #workshopBody { display: block; overflow: auto; overscroll-behavior: contain; }
@@ -922,3 +922,71 @@ body.cockpit #meters {
 #graphicsRecovery h2 { margin: 0; }
 #graphicsRecovery p { line-height: 1.5; }
 #graphicsRecovery::backdrop { background: #171523ca; }
+
+#workshopModes {
+  display: flex; gap: 18px; padding: 0 22px;
+  border-bottom: 1px solid #584d5c; background: #282431;
+}
+#workshopModes button {
+  min-height: 39px; padding: 5px 2px;
+  border: 0; border-bottom: 3px solid transparent; background: transparent; color: #c6b9c3;
+  font-size: 14px;
+}
+#workshopModes button[aria-pressed="true"] { border-color: var(--bay-accent); color: #fff1d9; }
+#finishes {
+  min-height: 0; padding: 16px; overflow: auto; overscroll-behavior: contain;
+  scrollbar-color: #877583 #332c39;
+}
+#finishes fieldset { border: 0; min-inline-size: 0; padding: 0; margin: 0 0 20px; }
+#finishes fieldset:last-child { margin-bottom: 0; }
+#finishes legend { padding: 0; margin-bottom: 8px; font-weight: 750; color: #ffead1; }
+.finish-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 6px; }
+.finish-grid button {
+  min-width: 0; padding: 0 0 9px; display: grid; align-content: start; gap: 2px;
+  text-align: left; border: 1px solid #635666; border-radius: 2px;
+  color: #f2e4dc; background: #332d3a;
+}
+.finish-grid button[aria-pressed="true"] { border-color: var(--bay-accent); background: #423b45; box-shadow: inset 0 -2px var(--bay-accent); }
+.finish-grid button:focus-visible { outline: 2px solid #fff0be; outline-offset: 1px; }
+.finish-grid strong, .finish-grid small { padding: 0 7px; }
+.finish-grid strong { font-size: 14px; }
+.finish-grid small { color: #f7cf99; font: 600 11px/1.35 ui-monospace, Menlo, monospace; }
+.finish-sample {
+  display: grid; place-items: center; margin-bottom: 4px; width: 100%; aspect-ratio: 2.4;
+  background-color: #262531; background-image: linear-gradient(90deg,#dcd2e209 1px,transparent 1px),linear-gradient(#dcd2e209 1px,transparent 1px);
+  background-size: 12px 12px; border-bottom: 1px solid #554b5a;
+}
+.finish-sample canvas { display: block; width: 100%; height: auto; image-rendering: pixelated; }
+.finish-sample.flame { --plume: #ff923a; --glow: #ffde9a; }
+[data-finish="ion"] .flame { --plume: #289be7; --glow: #b4ecff; }
+[data-finish="plasma"] .flame { --plume: #c948cf; --glow: #ffd0ff; }
+[data-finish="mint"] .flame { --plume: #26bf8d; --glow: #b5ffe1; }
+.finish-sample.flame i {
+  width: 68%; height: 48%; position: relative; border-left: 5px solid #7f7c89;
+  background: var(--plume);
+  clip-path: polygon(0 8%,28% 8%,28% 17%,51% 17%,51% 28%,72% 28%,72% 39%,89% 39%,89% 46%,100% 46%,100% 55%,76% 55%,76% 66%,62% 66%,62% 77%,39% 77%,39% 91%,0 91%);
+}
+.finish-sample.flame i::after {
+  content: ""; position: absolute; top: 26%; bottom: 28%; left: 0; width: 73%; background: var(--glow);
+  clip-path: polygon(0 0,38% 0,38% 21%,72% 21%,72% 36%,100% 36%,100% 59%,53% 59%,53% 82%,23% 82%,23% 100%,0 100%);
+}
+#applyFinish {
+  margin-left: auto; min-height: 38px; border: 1px solid #ffc795; background: #f8b47e;
+  color: #241f29; font-weight: 750; white-space: nowrap;
+}
+#applyFinish:disabled { background: #413845; border-color: #756676; color: #cfbfcb; }
+#parts[hidden], #finishes[hidden], #workshopModes[hidden], #applyFinish[hidden] { display: none; }
+.paint-shop #workshopStats, .paint-shop #workshopProgress { display: none; }
+.paint-shop .workshop-ident { padding-bottom: 4px; }
+@media (max-width: 680px) {
+  #workshopModes { padding-inline: 12px; }
+  #finishes { padding: 10px; overflow: visible; }
+  .paint-shop .hangar-footer { flex-wrap: wrap; gap: 5px 8px; }
+  .paint-shop .hangar-footer:has(#applyFinish:not([hidden])) #hangarStatus { width: 100%; }
+  .paint-shop #applyFinish { flex: 1; }
+}
+@media (max-width: 460px) {
+  .finish-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .finish-sample { aspect-ratio: 3.05; }
+  .finish-sample canvas { width: 76%; }
+}

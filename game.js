@@ -390,10 +390,44 @@
       g.allies.length = g.enemies.length = g.shots.length = 0;
       g.lockTarget = g.target = null;
       g.lockProgress = targetTimer = 0;
+      const center = world.islandCenter, p = g.player;
+      if (center && (mission === encounters.beacons || mission === encounters.nest)) {
+        const dx = p.x - center.x, dz = p.z - center.z;
+        const distance = Math.hypot(dx, dz);
+        if (distance > 5100) {
+          p.x = center.x + 2600 * dx / distance;
+          p.z = center.z + 2600 * dz / distance;
+          p.y = Math.max(200, world.height(p.x, p.z) + 150);
+          p.yaw = Math.atan2(-dx, -dz);
+          p.pitch = p.bank = p.roll = p.vy = rollClock = 0;
+          p.speed = p.frame.cruise;
+          steering = false;
+          notify("message", "New approach · inbound to Jade Isle");
+        }
+      }
       spawnGroup();
     }
 
     function landSite(x, z) {
+      if (world.islandCenter) {
+        const center = world.islandCenter;
+        let best, bestScore = Infinity;
+        for (let dz = -1600; dz <= 1600; dz += 160) {
+          for (let dx = -2080; dx <= 2080; dx += 160) {
+            const sx = center.x + dx, sz = center.z + dz, h = world.height(sx, sz);
+            if (h < 15 || g.enemies.some(e => e.ground && Math.hypot(e.x - sx, e.z - sz) < 220)) continue;
+            const relief = Math.max(Math.abs(world.height(sx + 18, sz) - world.height(sx - 18, sz)),
+              Math.abs(world.height(sx, sz + 18) - world.height(sx, sz - 18)));
+            if (relief > 17) continue;
+            const score = Math.hypot(sx - x, sz - z);
+            if (score < bestScore) {
+              best = { x: sx, z: sz };
+              bestScore = score;
+            }
+          }
+        }
+        return best || center;
+      }
       if (world.height(x, z) > 9) return { x, z };
       // A spiral samples dry land in any direction, including across tile seams.
       for (let i = 1; i <= 700; ++i) {

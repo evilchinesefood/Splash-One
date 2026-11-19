@@ -6,7 +6,10 @@ window.PatrolWorld = (() => {
     MIN = -256,
     RANGE = 1536;
 
-  function generate(size, span, min, range, mesa, progress, finish) {
+  const islandCenter = { x: -180, z: 1530 };
+
+  function generate(size, span, min, range, region, islandOrigin, progress, finish) {
+    const mesa = region === "mesa", island = region === "island";
     const mix = (a, b, t) => a + (b - a) * t;
     const sat = (x) => Math.max(0, Math.min(1, x));
     const smooth = (x) => ((x = sat(x)), x * x * (3 - 2 * x));
@@ -75,6 +78,23 @@ window.PatrolWorld = (() => {
       const terrace = rock / 29;
       return floor + rise * (Math.floor(terrace) + smooth(terrace % 1)) * 29;
     }
+    function islandHeight(x, z, hills, detail) {
+      const u = (x - islandOrigin.x) / 1480, v = (z - islandOrigin.z) / 1200;
+      const angle = Math.atan2(v, u);
+      // One radius per bearing connects every headland to the interior.
+      const coast = 1 + .13 * Math.sin(angle * 3) + .09 * Math.cos(angle * 2 - .4)
+        + .085 * Math.sin(angle * 5) + .035 * Math.cos(angle * 9);
+      const inland = (coast - Math.hypot(u, v)) * 1200;
+      if (inland <= 0) {
+        const depth = -inland;
+        return -Math.min(180, depth * .085 + Math.max(0, depth - 150) * .48);
+      }
+      const summit = Math.max(0, 1 - Math.hypot((u + .23) * 1.28, (v - .12) * 1.75));
+      const saddle = Math.max(0, 1 - Math.hypot((u - .34) * 1.65, (v + .12) * 2.35));
+      const ridge = 550 * summit * summit + 315 * saddle * saddle;
+      return Math.min(26, inland * .135) + smooth(inland / 315) *
+        (ridge * (.83 + hills * .29) + 60 * hills + 32 * detail);
+    }
     for (let j = 0; j < size; j++) {
       for (let i = 0; i < size; i++) {
         const u = (i + 0.5) / size,
@@ -89,6 +109,16 @@ window.PatrolWorld = (() => {
           const k = j * size + i;
           field[k] = canyonHeight(x, z, angle, n, hills, detail);
           biome[k] = hills * .55 + detail * .45;
+          continue;
+        }
+        if (island) {
+          const k = j * size + i;
+          const h = islandHeight(x, z, hills, detail);
+          const grove = .62 * hills + .38 * detail;
+          const crown = hash(i >> 1, j >> 1, 37);
+          const wooded = h > 15 && h < 323 && grove > .34;
+          field[k] = h + (wooded ? 5 + 8 * crown : 0);
+          biome[k] = wooded ? .48 + .31 * grove + .15 * crown : .3 * grove;
           continue;
         }
         const center = 365 * Math.sin(angle) + 260 * Math.sin(2 * angle) + 290 * (Math.cos(angle) - 1);
@@ -150,6 +180,10 @@ window.PatrolWorld = (() => {
       rock: [155, 141, 151],
       snow: [246, 216, 196],
     };
+    const islandColors = {
+      beach: [242, 213, 153], grass: [151, 178, 104], wood: [58, 134, 95],
+      fern: [112, 162, 92], shade: [37, 104, 88], cliff: [123, 125, 127], crest: [158, 155, 143],
+    };
     const strata = [[177, 85, 62], [208, 115, 69], [227, 148, 88], [201, 106, 65],
       [170, 74, 58], [221, 128, 78], [240, 181, 115], [198, 97, 64]];
     const alluvium = [218, 173, 114], sage = [143, 143, 103], riverbank = [224, 193, 135];
@@ -170,6 +204,10 @@ window.PatrolWorld = (() => {
           if (h < 8) rgb = riverbank;
           else if (grade < .34 && h < 125) rgb = b < .46 || (b < .66 && grain > .91) ? sage : alluvium;
           else if (grade < .18 && b > .53) rgb = alluvium;
+        } else if (island) {
+          rgb = h < 13 ? islandColors.beach : islandColors.grass;
+          if (b > .44) rgb = b > .79 ? islandColors.shade : b > .70 ? islandColors.wood : islandColors.fern;
+          if (h > 315 && (grade > .43 || h > 400)) rgb = h > 428 ? islandColors.crest : islandColors.cliff;
         } else {
           if (h > 5) rgb = b > 0.11 ? colors.meadow : colors.grass;
           if (b > 0.44)
@@ -326,13 +364,14 @@ window.PatrolWorld = (() => {
   uniform vec2 resolution;
   uniform vec3 pos,rt,up,fw;
   uniform float fov,tm;
-  uniform bool mesa,night,storm;
+  uniform bool mesa,island,night,storm;
   uniform sampler2D elev,land,cloud;
   uniform highp sampler3D volume;
   out vec4 outColor;
   const float tile=8192.;
   const vec3 sunDir=vec3(.247,.207,.947);
   float heightAt(vec2 p){
+    if(island && any(greaterThan(abs(p),vec2(tile*.5))))return -180.;
     vec2 h=texture(elev,p/tile).rg;
     return -256.+1536.*dot(h,vec2(65280.,255.))/65535.;
   }
@@ -350,6 +389,7 @@ window.PatrolWorld = (() => {
     float facing=smoothstep(-.45,.99,dot(normalize(rd.xz+vec2(.00001)),normalize(sunDir.xz)));
     if(storm) return mix(vec3(.35,.42,.51),vec3(.62,.67,.69),facing);
     if(night) return mix(vec3(.12,.155,.30),vec3(.25,.33,.48),facing);
+    if(island) return mix(vec3(.53,.76,.82),vec3(1.,.84,.64),facing);
     if(mesa) return mix(vec3(.63,.74,.77),vec3(1.,.79,.59),facing);
     return mix(vec3(.72,.64,.79),vec3(1.,.77,.57),facing);
   }
@@ -449,6 +489,7 @@ window.PatrolWorld = (() => {
     float bands=floor(clamp(depth/21.+b*.68,0.,4.));
     vec3 col=mix(vec3(.38,.77,.72),vec3(.125,.335,.468),bands*.25);
     if(mesa) col=mix(vec3(.38,.83,.73),vec3(.095,.46,.48),bands*.25);
+    if(island) col=mix(vec3(.38,.86,.77),vec3(.055,.26,.405),bands*.25);
     if(night) col=mix(vec3(.18,.39,.45),vec3(.055,.15,.255),bands*.25);
     if(storm) col=mix(vec3(.34,.53,.55),vec3(.11,.215,.30),bands*.25);
     float fade=1.-smoothstep(750.,3600.,t);
@@ -564,7 +605,7 @@ window.PatrolWorld = (() => {
         "(" +
         generate.toString() +
         ")(" +
-        [SIZE, SPAN, MIN, RANGE, mapId === "mesa"].join(",") +
+        [SIZE, SPAN, MIN, RANGE, JSON.stringify(mapId), JSON.stringify(islandCenter)].join(",") +
         ",v=>postMessage(v),m=>postMessage(m,[m.heights.buffer,m.surface.buffer,m.cloudMap.buffer,m.cloudVolume.buffer]));";
       const url = URL.createObjectURL(new Blob([body], { type: "text/javascript" }));
       const worker = new Worker(url);
@@ -636,7 +677,7 @@ window.PatrolWorld = (() => {
     gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     gl.uniform1i(gl.getUniformLocation(program, "volume"), 3);
     const loc = Object.fromEntries(
-      ["resolution", "pos", "rt", "up", "fw", "fov", "tm", "mesa", "night", "storm"].map((k) => [k, gl.getUniformLocation(program, k)]),
+      ["resolution", "pos", "rt", "up", "fw", "fov", "tm", "mesa", "island", "night", "storm"].map((k) => [k, gl.getUniformLocation(program, k)]),
     );
     return { program, tex, volume, loc };
   }
@@ -651,6 +692,7 @@ window.PatrolWorld = (() => {
     const data = await maps(onProgress, mapId);
     let graphics = gl.isContextLost() ? null : uploadTerrain(gl, data);
     function height(x, z) {
+      if (mapId === "island" && (Math.abs(x) > SPAN / 2 || Math.abs(z) > SPAN / 2)) return -180;
       const fx = (x * SIZE) / SPAN - 0.5,
         fz = (z * SIZE) / SPAN - 0.5,
         i = Math.floor(fx),
@@ -680,6 +722,7 @@ window.PatrolWorld = (() => {
       cloudTop,
       waterLevel: 0,
       mapId,
+      islandCenter: mapId === "island" ? islandCenter : null,
       get night() { return sky === "night"; },
       get storm() { return sky === "storm"; },
       setSky(value) { sky = value; },
@@ -704,6 +747,7 @@ window.PatrolWorld = (() => {
         gl.activeTexture(gl.TEXTURE3);
         gl.bindTexture(gl.TEXTURE_3D, volume);
         gl.uniform1i(loc.mesa, mapId === "mesa");
+        gl.uniform1i(loc.island, mapId === "island");
         gl.uniform1i(loc.night, sky === "night");
         gl.uniform1i(loc.storm, sky === "storm");
         gl.viewport(0, 0, canvas.width, canvas.height);

@@ -3,11 +3,16 @@ window.PatrolDeck = (() => {
   const regions = {
     lake: {name: "Autumn Lake District", description: "Fly among island forests and mountain lakes.", accent: "#c6cf8e"},
     mesa: {name: "Painted Mesa", description: "Follow the river between red sandstone mesas.", accent: "#efa77c"},
+    island: {name: "Jade Isle", description: "Circle one forested island above turquoise shoals and open ocean.", accent: "#85dcca"},
   };
   function skies(region) {
+    const daylight = {
+      lake: ["Golden hour", "Long shadows and peach clouds at sunset."],
+      mesa: ["Daylight", "Clear skies above sunlit sandstone."],
+      island: ["Trade winds", "Sunlit beaches beneath scattered ocean clouds."],
+    }[region];
     return {
-      day: {name: region === "mesa" ? "Daylight" : "Golden hour", description: region === "mesa" ?
-        "Clear skies above sunlit sandstone." : "Long shadows and peach clouds at sunset.", accent: "#ffcc87"},
+      day: {name: daylight[0], description: daylight[1], accent: "#ffcc87"},
       night: {name: "Moonlight", description: "Stars and navigation lights over a moonlit horizon.", accent: "#a8bbf0"},
       storm: {name: "Storm", description: "Dark cloud banks and driving rain.", accent: "#84cfdb"},
     };
@@ -25,9 +30,10 @@ window.PatrolDeck = (() => {
     canvas.height = 64;
     canvas.setAttribute("aria-hidden", "true");
     const ctx = canvas.getContext("2d");
-    const night = mode === "night", storm = mode === "storm", mesa = region === "mesa";
+    const night = mode === "night", storm = mode === "storm", mesa = region === "mesa", island = region === "island";
     const palette = night ? ["#22263e","#353756","#52546d","#615675","#44455e","#414a68","#273749"] :
       storm ? ["#3b4155","#576070","#848b96","#7a818d","#505e6e","#657985","#344958"] :
+      island ? ["#6899b6","#9ec7c3","#f6d8a5","#758c70","#416f5e","#338092","#274957"] :
       mesa ? ["#75b4bd","#afc8b8","#eed39c","#c58472","#a75746","#69b9b8","#683d43"] :
       ["#817d9e","#c7979f","#fbd3a4","#a78c93","#68616c","#82a5a4","#464757"];
     function rect(x,y,w,h,col) {ctx.fillStyle=col;ctx.fillRect(x,y,w,h);}
@@ -60,7 +66,17 @@ window.PatrolDeck = (() => {
       }
     }
     ctx.save();ctx.translate(0,dy);
-    if (mesa) {
+    if (island) {
+      rect(0,37,144,27,palette[5]);
+      const shoal = night ? "#376075" : storm ? "#547984" : "#6dc4b5";
+      const beach = night ? "#9ca59c" : storm ? "#a8a59a" : "#e1cf97";
+      poly([[12,44],[37,40],[60,39],[97,39],[131,44],[112,48],[69,49],[27,47]],shoal);
+      poly([[18,43],[41,39],[66,37],[105,39],[127,43],[103,46],[70,45],[45,46]],beach);
+      poly([[23,42],[39,38],[53,29],[62,28],[71,19],[78,24],[84,28],[90,25],[104,35],[119,40],[124,42],[101,44],[71,42],[47,44]],palette[3]);
+      poly([[69,23],[63,34],[57,37],[52,41],[73,41],[89,42],[105,43],[119,42],[105,37],[91,28],[82,32],[77,29]],palette[4]);
+      for (const [x,y,w] of [[7,49,12],[90,47,18],[43,51,10],[68,56,15],[119,52,11]])
+        rect(x,y,w,1,shoal);
+    } else if (mesa) {
       poly([[0,36],[14,33],[18,24],[31,24],[34,33],[50,35],[57,26],[71,26],[73,33],[90,36],[111,29],[121,29],[127,35],[144,35],[144,64],[0,64]],palette[3]);
       poly([[0,25],[15,25],[20,38],[37,42],[59,44],[86,43],[104,39],[112,29],[128,29],[130,22],[144,22],[144,64],[0,64]],palette[4]);
       poly([[0,32],[15,32],[17,36],[3,36],[12,43],[32,46],[18,47],[0,44]],palette[6]);
@@ -99,18 +115,19 @@ window.PatrolDeck = (() => {
     const buttons=Object.keys(groups).map(id=>document.getElementById(id));
     const region=()=>document.getElementById("regionPick").value;
     const getOptions=id=>id==="airframePick" ? PatrolGame.airframes : id==="regionPick" ? regions : skies(region());
-    function art(id,key) {
+    function art(id,key,look) {
       const image=node("span",id==="airframePick"?"deck-art aircraft-art":"deck-art");
-      image.append(id==="airframePick"?PatrolArt.aircraftPortrait(key):landscape(id==="regionPick"?key:region(),id==="regionPick"?null:key));
+      image.append(id==="airframePick"?PatrolArt.aircraftPortrait(key,look):landscape(id==="regionPick"?key:region(),id==="regionPick"?null:key));
       return image;
     }
     function refresh() {
+      const looks = PatrolHangar.read().looks;
       for(const btn of buttons){
         const option=getOptions(btn.id)[btn.value];
         const content=node("span","deck-pick-copy");
         content.append(node("small",null,groups[btn.id].label),node("strong",null,option.name));
         btn.style.setProperty("--accent",option.accent||aircraftAccents[btn.value]);
-        btn.replaceChildren(art(btn.id,btn.value),content);
+        btn.replaceChildren(art(btn.id,btn.value,looks[btn.value]),content);
         btn.setAttribute("aria-label",groups[btn.id].label+" · "+option.name+". Change selection");
       }
     }
@@ -126,7 +143,7 @@ window.PatrolDeck = (() => {
         card.type="button";card.dataset.choice=key;
         card.setAttribute("aria-pressed",String(key===chosen));
         card.style.setProperty("--accent",option.accent||aircraftAccents[key]);
-        const image=art(btn.id,key),copy=node("span","choice-copy");
+        const image=art(btn.id,key,profile?.looks[key]),copy=node("span","choice-copy");
         if(key===chosen)image.append(node("span","deck-selected","✓ Selected"));
         copy.append(node("strong","choice-name",option.name));
         const ranks = aircraft ? profile.ships[key] : null;
@@ -164,9 +181,28 @@ window.PatrolDeck = (() => {
     }
     for(const btn of buttons)btn.onclick=()=>{
       fillChoices(btn);
+      btn.focus({preventScroll:true});
       dialog.showModal();
       choices.querySelector('[aria-pressed="true"]').focus({preventScroll:true});
     };
+    // Older browsers send backdrop clicks to the dialog itself, including clicks on its padding.
+    for (const menu of document.querySelectorAll('dialog[closedby="any"]')) {
+      if ("closedBy" in menu) continue;
+      let pressedOutside = false;
+      function onBackdrop(event) {
+        const r = menu.getBoundingClientRect();
+        return event.target === menu && (event.clientX < r.left || event.clientX >= r.right ||
+          event.clientY < r.top || event.clientY >= r.bottom);
+      }
+      menu.addEventListener("pointerdown", event => {
+        pressedOutside = event.isPrimary && event.button === 0 && onBackdrop(event);
+      });
+      menu.addEventListener("pointercancel", () => { pressedOutside = false; });
+      menu.addEventListener("click", event => {
+        if (pressedOutside && onBackdrop(event)) menu.close();
+        pressedOutside = false;
+      });
+    }
     refresh();
     document.getElementById("hangar").addEventListener("close",refresh);
     return {refresh};

@@ -379,7 +379,7 @@ const patrol = (() => {
   const hangar = $("hangar");
   let settlement = Promise.resolve();
 
-  let workshopScope = "kestrel";
+  let workshopScope = "kestrel", workshopMode = "upgrades", previewFinish = null;
   const workshops = {
     kestrel: { title: "Multirole fighter", accent: "#a5cddb" },
     needle: { title: "Interceptor", accent: "#8bd9d3" },
@@ -393,6 +393,52 @@ const patrol = (() => {
   function hangarHint() {
     return PatrolHangar.sessionOnly ? "Progress is saved for this visit." : "Upgrades take effect on your next patrol.";
   }
+  function renderFinishes(profile, scope) {
+    const look = profile.looks[scope];
+    const sections = [];
+    for (const [kind, options] of Object.entries(PatrolHangar.cosmetics)) {
+      const group = document.createElement("fieldset");
+      const legend = document.createElement("legend");
+      legend.textContent = kind === "paint" ? "Airframe paint" : "Engine flame";
+      group.append(legend);
+      const choices = document.createElement("div");
+      choices.className = "finish-grid";
+      for (const item of options) {
+        const option = document.createElement("button");
+        option.type = "button";
+        option.dataset.finish = item.id;
+        option.dataset.kind = kind;
+        const selected = (previewFinish?.kind === kind ? previewFinish.id : look[kind]) === item.id;
+        option.setAttribute("aria-pressed", selected);
+        const sample = document.createElement("span");
+        sample.className = "finish-sample " + kind;
+        sample.setAttribute("aria-hidden", "true");
+        if (kind === "paint") {
+          sample.append(PatrolArt.aircraftPortrait(scope, { ...look, paint: item.id }));
+        } else {
+          sample.append(document.createElement("i"));
+        }
+        const name = document.createElement("strong"), cost = document.createElement("small");
+        name.textContent = item.name;
+        cost.textContent = look[kind] === item.id ? "Equipped" :
+          look.owned[kind].includes(item.id) ? "Owned" : item.price + " cr";
+        option.append(sample, name, cost);
+        choices.append(option);
+      }
+      group.append(choices);
+      sections.push(group);
+    }
+    $("finishes").replaceChildren(...sections);
+    const action = $("applyFinish");
+    action.hidden = !previewFinish || look[previewFinish.kind] === previewFinish.id;
+    if (action.hidden) return;
+    const { kind, id } = previewFinish;
+    const item = PatrolHangar.cosmetics[kind].find(option => option.id === id);
+    const owned = look.owned[kind].includes(id);
+    action.textContent = owned ? "Equip" : "Buy & equip · " + item.price + " cr";
+    action.setAttribute("aria-label", owned ? "Equip " + item.name : "Buy and equip " + item.name + " for " + item.price + " credits");
+    action.disabled = !owned && profile.credits < item.price;
+  }
   function renderParts() {
     const scope = workshopScope;
     const fleet = scope === "fleet";
@@ -401,6 +447,13 @@ const patrol = (() => {
     const profile = PatrolHangar.read();
     const ranks = fleet ? profile.fleet : profile.ships[scope];
     refreshWallet(profile);
+    const appearance = !fleet && workshopMode === "appearance";
+    $("workshopModes").hidden = fleet;
+    for (const tab of $("workshopModes").children) tab.setAttribute("aria-pressed", tab.dataset.mode === workshopMode);
+    $("parts").hidden = appearance;
+    $("finishes").hidden = !appearance;
+    $("applyFinish").hidden = true;
+    hangar.classList.toggle("paint-shop", appearance);
     hangar.style.setProperty("--bay-accent", workshops[scope].accent);
     for (const tab of $("workbenches").children) {
       tab.setAttribute("aria-pressed", tab.dataset.scope === scope);
@@ -424,8 +477,15 @@ const patrol = (() => {
     const capacity = catalog.reduce((sum, part) => sum + part.prices.length, 0);
     $("workshopProgress").textContent = installed + " / " + capacity + " ranks installed";
     const art = $("workshopPortrait");
-    art.replaceChildren(...(fleet ? ["kestrel", "needle", "manta"] : [scope]).map(PatrolArt.aircraftPortrait));
+    art.replaceChildren(...(fleet ? ["kestrel", "needle", "manta"] : [scope]).map(id => {
+      const look = profile.looks[id];
+      return PatrolArt.aircraftPortrait(id, appearance && previewFinish ? { ...look, [previewFinish.kind]: previewFinish.id } : look);
+    }));
     art.classList.toggle("fleet-formation", fleet);
+    if (appearance) {
+      renderFinishes(profile, scope);
+      return;
+    }
     const cards = [];
     for (const part of catalog) {
       const rank = ranks[part.id];
@@ -481,20 +541,62 @@ const patrol = (() => {
     }
     $("parts").replaceChildren(...cards);
   }
+  $("workshopModes").addEventListener("click", event => {
+    const tab = event.target.closest("[data-mode]");
+    if (!tab || tab.dataset.mode === workshopMode) return;
+    workshopMode = tab.dataset.mode;
+    previewFinish = null;
+    renderParts();
+    $("workshopBody").scrollTop = 0;
+    $("hangarStatus").textContent = workshopMode === "appearance" ? "Choose a finish to preview." : hangarHint();
+  });
+  $("finishes").addEventListener("click", event => {
+    const option = event.target.closest("[data-finish]");
+    if (!option) return;
+    const { kind, finish: id } = option.dataset;
+    previewFinish = { kind, id };
+    const item = PatrolHangar.cosmetics[kind].find(finish => finish.id === id);
+    const profile = PatrolHangar.read(), look = profile.looks[workshopScope];
+    const short = look.owned[kind].includes(id) ? 0 : item.price - profile.credits;
+    renderParts();
+    $("hangarStatus").textContent = look[kind] === id ? item.name + " equipped." :
+      short > 0 ? item.name + " · Need " + short + " more credits." : "Previewing " + item.name + ".";
+    $("finishes").querySelector('[data-kind="' + kind + '"][data-finish="' + id + '"]').focus({ preventScroll: true });
+  });
+  $("applyFinish").onclick = async () => {
+    if (!previewFinish) return;
+    const scope = workshopScope, chosen = previewFinish;
+    $("applyFinish").disabled = true;
+    const applied = await PatrolHangar.equipFinish(scope, chosen.kind, chosen.id);
+    renderParts();
+    if (workshopScope !== scope || !hangar.open || workshopMode !== "appearance" || previewFinish !== chosen) return;
+    const item = PatrolHangar.cosmetics[chosen.kind].find(finish => finish.id === chosen.id);
+    $("hangarStatus").textContent = applied ? item.name + " equipped on " + PatrolGame.airframes[scope].name +
+      (PatrolHangar.sessionOnly ? " for this visit." : ".") : "Balance changed. Check the price and try again.";
+    if (applied) PatrolAudio.play("equip");
+    $("finishes").querySelector('[data-kind="' + chosen.kind + '"][data-finish="' + chosen.id + '"]').focus({ preventScroll: true });
+  };
   $("workbenches").addEventListener("click", event => {
     const tab = event.target.closest("[data-scope]");
     if (!tab || workshopScope === tab.dataset.scope) return;
     workshopScope = tab.dataset.scope;
+    previewFinish = null;
     renderParts();
-    $("workshopBody").scrollTop = $("parts").scrollTop = 0;
-    $("hangarStatus").textContent = hangarHint();
+    $("workshopBody").scrollTop = $("parts").scrollTop = $("finishes").scrollTop = 0;
+    $("hangarStatus").textContent = workshopScope !== "fleet" && workshopMode === "appearance" ? "Choose a finish to preview." : hangarHint();
   });
-  async function openHangar() {
+  async function openHangar(event) {
+    const opener = event.currentTarget;
     await settlement;
+    workshopMode = "upgrades";
+    previewFinish = null;
     workshopScope = g && g.state !== "title" ? g.player.frame.id : $("airframePick").value;
     $("hangarStatus").textContent = hangarHint();
     renderParts();
-    if (!hangar.open) hangar.showModal();
+    if (!hangar.open) {
+      opener.focus({ preventScroll: true });
+      hangar.showModal();
+    }
     $("workshopBody").scrollTop = $("parts").scrollTop = 0;
     $("workbenches").querySelector('[aria-pressed="true"]').focus({ preventScroll: true });
   }
@@ -531,7 +633,11 @@ const patrol = (() => {
     $("controlPrimary").textContent = frame.weapon.toLowerCase();
     $("touchPrimaryHint").textContent = frame.trigger;
     document.querySelector('[data-control="fire"]').textContent = frame.trigger;
-    if (g?.state === "title") g.player.frame = PatrolGame.tunedFrame(frame.id, PatrolHangar.read().ships[frame.id]);
+    if (g?.state === "title") {
+      const profile = PatrolHangar.read();
+      g.player.frame = PatrolGame.tunedFrame(frame.id, profile.ships[frame.id]);
+      g.player.frame.look = profile.looks[frame.id];
+    }
   }
   airframePick.onchange = () => {
     previewAirframe();
@@ -550,7 +656,9 @@ const patrol = (() => {
     paused = false;
     unlockSound();
     const profile = PatrolHangar.read();
-    g.start(minutes, profile.ships[airframePick.value], airframePick.value, profile.fleet);
+    const id = airframePick.value;
+    g.start(minutes, profile.ships[id], id, profile.fleet);
+    g.player.frame.look = profile.looks[id];
     g.view = 0;
     carry = 0;
     lastPanel = "";

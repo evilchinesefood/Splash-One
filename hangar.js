@@ -30,6 +30,30 @@ window.PatrolHangar = (() => {
     { id: "respawn", name: "Respawn", icon: "siphon", group: "Recovery", prices: [600, 1100],
       detail: "Return to the fight after losing your aircraft. Gain one extra life per patrol for each rank." },
   ];
+  const cosmetics = {
+    paint: [
+      { id: "stock", name: "Factory paint", price: 0 },
+      { id: "glacier", name: "Glacier", price: 45 },
+      { id: "crimson", name: "Crimson", price: 60 },
+      { id: "midnight", name: "Midnight", price: 75 },
+    ],
+    flame: [
+      { id: "stock", name: "Amber", price: 0 },
+      { id: "ion", name: "Ion blue", price: 55 },
+      { id: "plasma", name: "Plasma violet", price: 70 },
+      { id: "mint", name: "Mint", price: 85 },
+    ],
+  };
+
+  function restoreLook(saved) {
+    const look = { owned: {} };
+    for (const [kind, options] of Object.entries(cosmetics)) {
+      const items = Array.isArray(saved?.owned?.[kind]) ? saved.owned[kind] : [];
+      look.owned[kind] = options.filter(item => !item.price || items.includes(item.id)).map(item => item.id);
+      look[kind] = look.owned[kind].includes(saved?.[kind]) ? saved[kind] : "stock";
+    }
+    return look;
+  }
   function partsFor(scope) {
     return Object.hasOwn(shipParts, scope) ? shipParts[scope] : [];
   }
@@ -46,7 +70,8 @@ window.PatrolHangar = (() => {
       return [id, ranksFor(catalog, shared || saved?.ships?.[id])];
     }));
     return { version: 2, credits: Number.isSafeInteger(saved?.credits) && saved.credits >= 0 ? saved.credits : 0,
-      ships, fleet: ranksFor(fleetParts, saved?.fleet) };
+      ships, fleet: ranksFor(fleetParts, saved?.fleet),
+      looks: Object.fromEntries(Object.keys(ships).map(id => [id, restoreLook(saved?.looks?.[id])])) };
   }
   let career = restore(null);
   let sessionOnly = false;
@@ -88,6 +113,22 @@ window.PatrolHangar = (() => {
       return true;
     });
   }
+  function equipFinish(scope, kind, id) {
+    return transact(profile => {
+      if (!Object.hasOwn(profile.looks, scope) || !Object.hasOwn(cosmetics, kind)) return false;
+      const item = cosmetics[kind].find(option => option.id === id);
+      if (!item) return false;
+      const look = profile.looks[scope];
+      if (look[kind] === id) return true;
+      const owned = look.owned[kind].includes(id);
+      const price = owned ? 0 : item.price;
+      if (price > profile.credits) return false;
+      const inventory = owned ? look.owned : { ...look.owned, [kind]: [...look.owned[kind], id] };
+      save({ ...profile, credits: profile.credits - price,
+        looks: { ...profile.looks, [scope]: { ...look, [kind]: id, owned: inventory } } });
+      return true;
+    });
+  }
   function statement(game) {
     const flight = Math.max(1, Math.floor(game.elapsed / 10));
     const combat = game.kills * 3;
@@ -105,5 +146,5 @@ window.PatrolHangar = (() => {
       }
     });
   }
-  return { read, purchase, deposit, statement, partsFor, fleetParts, get sessionOnly() { return sessionOnly; } };
+  return { read, purchase, equipFinish, deposit, statement, partsFor, fleetParts, cosmetics, get sessionOnly() { return sessionOnly; } };
 })();
