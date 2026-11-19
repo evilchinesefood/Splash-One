@@ -99,6 +99,33 @@
   font-size: clamp(12px, 1.42vw, 15px);
   line-height: 1.4;
 }
+.upgrade-draft .gear-stats {
+  align-self: stretch;
+  display: grid;
+  gap: 5px;
+  margin: 10px clamp(9px, 1.45vw, 17px) 0;
+  border-top: 1px solid #655766;
+  padding-top: 8px;
+}
+.upgrade-draft .gear-stat {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1px 6px;
+  font-size: clamp(12px, 1.2vw, 14px);
+}
+.upgrade-draft .gear-label { color: #ddcfca; }
+.upgrade-draft .gear-values { color: #cebbb4; font-variant-numeric: tabular-nums; }
+.upgrade-draft .gear-after { color: var(--gear-color); }
+.upgrade-draft .gear-focus {
+  margin: 8px clamp(9px, 1.45vw, 17px) 0;
+  padding-inline-start: 7px;
+  border-inline-start: 2px solid #8ee6da;
+  color: #b1e7de;
+  font-size: clamp(12px, 1.2vw, 14px);
+  line-height: 1.3;
+}
 .upgrade-draft .upgrade-card:hover,
 .upgrade-draft .upgrade-card:focus-visible {
   background: #483b48;
@@ -152,7 +179,9 @@
   .upgrade-draft #modalText { font-size: 12px; margin-bottom: 15px; }
   .upgrade-draft .gear-level,
   .upgrade-draft .gear-name,
-  .upgrade-draft .gear-detail { margin-inline: 7px; }
+  .upgrade-draft .gear-detail,
+  .upgrade-draft .gear-focus,
+  .upgrade-draft .gear-stats { margin-inline: 7px; }
   .upgrade-draft .gear-level { letter-spacing: 0; }
 }
 @media (max-height: 480px) and (min-aspect-ratio: 1/1) {

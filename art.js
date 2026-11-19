@@ -1237,7 +1237,8 @@
     const w = ctx.canvas.width,
       h = ctx.canvas.height,
       e = g.player;
-    const aimDistance = g.view === 2 ? 65 : 450;
+    const lead = g.gunLead;
+    const aimDistance = g.view === 2 ? 65 : lead ? Math.hypot(lead.x - e.x, lead.y - e.y, lead.z - e.z) : 450;
     const aim = project(e.x + b.f[0] * aimDistance, e.y + b.f[1] * aimDistance, e.z + b.f[2] * aimDistance);
     if (aim && aim.x > 8 && aim.x < w - 8 && aim.y > 8 && aim.y < h - 8) {
       const x = Math.round(aim.x),
@@ -1305,6 +1306,22 @@
         const text = (behind ? "TURN " : "") + range;
         const margin = typeWidth(text) / 2 + 3;
         cockpitPlate(ctx, text, clamp(x, margin, w - margin), y + (Math.abs(dy) > .45 ? -15 : 8), "#ffdf9a", "#3e3535");
+      }
+    }
+    if (lead && visible(g, cam, g.lockTarget)) {
+      const point = project(lead.x, lead.y, lead.z);
+      const contact = project(g.lockTarget.x, g.lockTarget.y, g.lockTarget.z);
+      const bottom = h * (g.cockpitBlend > .5 ? .65 : .95);
+      if (point && contact && point.x > 6 && point.x < w - 6 && point.y > 8 && point.y < bottom &&
+          contact.x >= 0 && contact.x < w && contact.y >= 0 && contact.y < bottom) {
+        const x = Math.round(point.x), y = Math.round(point.y);
+        // A hollow sight leaves the aircraft and nose crosshair visible as they pass through.
+        for (const [shift, color, thickness] of [[-1, "#243c50", 3], [0, "#b2edff", 1]]) {
+          for (const sign of [-1, 1]) {
+            line(ctx, x - 2 + shift, y + sign * 4 + shift, x + 2 + shift, y + sign * 4 + shift, color, thickness);
+            line(ctx, x + sign * 4 + shift, y - 2 + shift, x + sign * 4 + shift, y + 2 + shift, color, thickness);
+          }
+        }
       }
     }
     if (g.lockTarget && g.lockProgress > 0) {
@@ -2002,17 +2019,37 @@
         if (cockpit) cockpitType(ctx, text, x + 11, y + 2, style.light, "left");
         else label(ctx, text, x + 11, y + 3, style.light);
       }
-      if (p.hitFlash > 0.04) {
-        const shield = p.shield > 0,
-          col = shield ? "#82def3" : "#ff845e";
-        ctx.globalAlpha = p.hitFlash * 0.74;
-        ctx.fillStyle = col;
-        for (const x of [0, w - 2])
-          for (let j = 0; j < 7; j++) ctx.fillRect(x, Math.round(h * (0.25 + j * 0.08)), 2, Math.ceil(h * 0.044));
-        ctx.globalAlpha = 1;
-      }
+      if (p.hitFlash > .04 && p.hitFrom) drawIncomingHit(ctx, cam, p);
     }
     ctx.restore();
+  }
+  function drawIncomingHit(ctx, cam, p) {
+    const [x, y, z] = p.hitFrom;
+    const dot = axis => x * axis[0] + y * axis[1] + z * axis[2];
+    const dx = dot(cam.right);
+    // In a level view the top and bottom edges indicate ahead and astern.
+    // Looking straight down, screen up already points north.
+    const dy = -dot(cam.up) - dot(cam.forward) * Math.hypot(cam.forward[0], cam.forward[2]);
+    if (Math.abs(dx) + Math.abs(dy) < .001) return;
+    const { width, height } = ctx.canvas;
+    const side = Math.abs(dx) > Math.abs(dy);
+    const sign = Math.sign(side ? dx : dy);
+    const along = side ? dy / Math.abs(dx) : dx / Math.abs(dy);
+    const center = Math.round((side ? height : width) * (.5 + .32 * along));
+    const edge = sign < 0 ? 2 : (side ? width : height) - 3;
+    const color = p.shield > 0 ? "#82def3" : "#ff845e";
+    ctx.globalAlpha = Math.min(1, p.hitFlash * 1.8);
+    for (let i = -2; i <= 2; i++) {
+      const offset = center + i * 6 - 2;
+      const inset = edge - sign * (3 - Math.abs(i));
+      ctx.fillStyle = "#302c40";
+      if (side) ctx.fillRect(inset - 2, offset - 1, 5, 7);
+      else ctx.fillRect(offset - 1, inset - 2, 7, 5);
+      ctx.fillStyle = color;
+      if (side) ctx.fillRect(inset - 1, offset, 3, 5);
+      else ctx.fillRect(offset, inset - 1, 5, 3);
+    }
+    ctx.globalAlpha = 1;
   }
   function aircraftPortrait(id, look) {
     const canvas = document.createElement("canvas");

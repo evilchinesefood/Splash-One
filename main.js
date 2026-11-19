@@ -95,6 +95,37 @@ const patrol = (() => {
     try { localStorage.setItem("patrol.captureMouse", captureMouse.checked ? "on" : "off"); } catch {}
   };
 
+  const flightSettingsKey = "patrol.flightSettings.v1";
+  const cameraIds = ["chase", "cockpit", "north"];
+  let saved = {};
+  try { saved = JSON.parse(localStorage.getItem(flightSettingsKey)) || {}; } catch {}
+  const sensitivity = $("sensitivity"), startingView = $("startingView");
+  sensitivity.value = Number.isInteger(saved.sensitivity) && saved.sensitivity >= 50 && saved.sensitivity <= 200
+    ? saved.sensitivity : 100;
+  startingView.value = cameraIds.includes(saved.startingView) ? saved.startingView : "chase";
+  $("invertPitch").checked = saved.invertPitch === true;
+  $("showLead").checked = saved.showLead !== false;
+  $("leftHanded").checked = saved.leftHanded === true;
+  function applyFlightSettings() {
+    const left = $("leftHanded").checked;
+    document.body.classList.toggle("left-handed", left);
+    $("stickSide").textContent = left ? "right" : "left";
+    $("sensitivityValue").textContent = sensitivity.value + "%";
+    sensitivity.setAttribute("aria-valuetext", sensitivity.value + "%");
+    input.invertPitch = $("invertPitch").checked;
+    if (g) g.showGunLead = $("showLead").checked;
+  }
+  applyFlightSettings();
+  document.querySelector(".flight-preferences").addEventListener("input", () => {
+    applyFlightSettings();
+    try {
+      localStorage.setItem(flightSettingsKey, JSON.stringify({
+        sensitivity: sensitivity.valueAsNumber, startingView: startingView.value, invertPitch: input.invertPitch,
+        showLead: $("showLead").checked, leftHanded: $("leftHanded").checked,
+      }));
+    } catch {}
+  });
+
   function captureFailed() {
     lockPending = false;
     if (active() && !lockHintShown) {
@@ -247,8 +278,9 @@ const patrol = (() => {
       aspect = rect.width / Math.max(1, rect.height);
     cockpitSpace = null;
     if (touchMode && rect.width > rect.height && rect.height <= 500 && !$("touch").hidden) {
-      const left = stick.getBoundingClientRect().right + 5;
-      const right = actionPad.getBoundingClientRect().left - 5;
+      const stickBounds = stick.getBoundingClientRect(), padBounds = actionPad.getBoundingClientRect();
+      const left = Math.min(stickBounds.right, padBounds.right) + 5;
+      const right = Math.max(stickBounds.left, padBounds.left) - 5;
       if (right > left) cockpitSpace = [(left - rect.left) / rect.width, (right - rect.left) / rect.width];
     }
     const h = Math.round(Math.min(scale, 970 / Math.max(1, aspect))),
@@ -621,7 +653,33 @@ const patrol = (() => {
       row.append(label, amount);
       breakdown.append(row);
     }
-    settlement = PatrolHangar.deposit(g, bill).then(refreshWallet);
+    const names = Object.fromEntries(g.loadout.map(item => [item.id, item.name]));
+    names.cannon = g.player.frame.weapon;
+    names.missile = "Missiles";
+    names.ally = "Friendly squadron";
+    const weapons = Object.entries(g.damageByWeapon)
+      .filter(([id]) => names[id])
+      .sort((a, b) => b[1] - a[1]);
+    const total = weapons.reduce((sum, [, hp]) => sum + hp, 0);
+    const rows = weapons.map(([id, hp]) => {
+      const row = document.createElement("div");
+      const label = document.createElement("dt"), amount = document.createElement("dd");
+      label.textContent = names[id];
+      const value = hp > 0 && hp < 0.1 ? "<0.1" : hp.toLocaleString("en-US", { maximumFractionDigits: 1 });
+      amount.textContent = value + " HP";
+      row.style.setProperty("--share", (total ? hp / total * 100 : 0) + "%");
+      row.append(label, amount);
+      return row;
+    });
+    $("damageBreakdown").replaceChildren(...rows);
+    const frame = g.player.frame;
+    $("bestAirframe").textContent = frame.name + " personal best";
+    $("bestEarnings").textContent = "";
+    const ledger = g.creditLedger;
+    settlement = PatrolHangar.deposit(g, bill).then(best => {
+      if (g.creditLedger === ledger) $("bestEarnings").textContent = best.toLocaleString("en-US") + (best === 1 ? " credit" : " credits");
+      refreshWallet();
+    });
   }
   const airframePick = $("airframePick");
   try {
@@ -651,7 +709,7 @@ const patrol = (() => {
       return;
     }
     clearInput();
-    view = 0;
+    view = cameraIds.indexOf(startingView.value);
     transition = null;
     paused = false;
     unlockSound();
@@ -659,7 +717,8 @@ const patrol = (() => {
     const id = airframePick.value;
     g.start(minutes, profile.ships[id], id, profile.fleet);
     g.player.frame.look = profile.looks[id];
-    g.view = 0;
+    g.view = view;
+    g.showGunLead = $("showLead").checked;
     carry = 0;
     lastPanel = "";
     sync();
@@ -880,14 +939,20 @@ const patrol = (() => {
     if (!active() || e.pointerType === "touch" || document.pointerLockElement === stage) return;
     // A browser that denies capture can still reach full deflection before the window edge.
     const gain = captureMouse.checked ? 1.5 : 1;
-    input.x = clamp((2 * e.clientX / innerWidth - 1) * gain, -1, 1);
-    input.y = clamp((1 - 2 * e.clientY / innerHeight) * gain, -1, 1);
+    const x = clamp((2 * e.clientX / innerWidth - 1) * gain, -1, 1);
+    const y = clamp((1 - 2 * e.clientY / innerHeight) * gain, -1, 1);
+    // A free cursor has finite travel. Keep full deflection reachable at every sensitivity.
+    const strength = sensitivity.valueAsNumber / 100;
+    const response = strength / (1 + (strength - 1) * Math.max(Math.abs(x), Math.abs(y)));
+    input.x = x * response;
+    input.y = y * response;
     input.moved = true;
   }
   window.addEventListener("mousemove", e => {
     if (!active() || document.pointerLockElement !== stage || !(e.movementX || e.movementY)) return;
-    input.x = clamp(input.x + 2 * e.movementX / stage.clientWidth, -1, 1);
-    input.y = clamp(input.y - 2 * e.movementY / stage.clientHeight, -1, 1);
+    const gain = 2 * sensitivity.valueAsNumber / 100;
+    input.x = clamp(input.x + gain * e.movementX / stage.clientWidth, -1, 1);
+    input.y = clamp(input.y - gain * e.movementY / stage.clientHeight, -1, 1);
     input.moved = true;
   });
   // Real mouse pointer events precede compatibility mouse events on hybrid devices.

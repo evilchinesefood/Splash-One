@@ -614,6 +614,16 @@ body.cockpit #meters {
   touch-action: pan-y;
 }
 .volume-row input:focus-visible { outline: 2px solid #ffe9c4; outline-offset: 2px; }
+.flight-preferences { margin: 8px 0 12px; padding-bottom: 8px; border-bottom: 1px solid #675662; }
+.flight-preferences > label { display: flex; align-items: center; gap: 8px; min-height: 34px; font-size: 14px; cursor: pointer; }
+.flight-preferences input[type="checkbox"] { width: 17px; height: 17px; margin: 0; accent-color: var(--peach); }
+.camera-preference { justify-content: space-between; }
+.camera-preference select { color: var(--paper); background: #292430; border: 1px solid #8c7782; border-radius: 3px; padding: 5px; font: inherit; }
+.flight-preferences > .touch-preference, .touch-active .mouse-preference { display: none; }
+.touch-active .flight-preferences > .touch-preference { display: flex; }
+.touch-active.left-handed #stick { left: auto; right: var(--edge-right); }
+.touch-active.left-handed .pad { right: auto; left: var(--edge-left); direction: rtl; }
+.touch-active.left-handed .pad button { direction: ltr; }
 .bindings { margin: 6px 0 10px; }
 .bindings div {
   display: flex;
@@ -784,8 +794,32 @@ body.cockpit #meters {
 #earnedBreakdown div { padding: 8px 10px; }
 #earnedBreakdown dt { color: #dacecc; font-size: 12px; }
 #earnedBreakdown dd { margin: 3px 0 0; color: #fff0ce; font: 700 14px ui-monospace, Menlo, monospace; }
+.aircraft-record {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 8px;
+  padding: 7px 12px; border-top: 1px solid #665463; color: #ffe1a5; font-size: 13px;
+}
+.aircraft-record strong, #damageBreakdown dd { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.damage-report { padding: 10px 12px 12px; border-top: 1px solid #665463; }
+.damage-report h3 { margin: 0 0 7px; font-size: 15px; color: #f9ead4; }
+#damageBreakdown { display: grid; gap: 6px; margin: 0; }
+#damageBreakdown div {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 6px; padding-bottom: 4px;
+  background: linear-gradient(to right, #82bfbb var(--share), #504451 var(--share)) bottom / 100% 2px no-repeat;
+}
+#damageBreakdown dt, #damageBreakdown dd { margin: 0; font-size: 13px; }
+#damageBreakdown dt { color: #e4d8dc; }
+#damageBreakdown dd { color: #b6ddd5; }
 .debrief #actions { grid-auto-flow: column; grid-auto-columns: 1fr; }
 .debrief #actions .action { display: grid; place-items: center; min-height: 44px; padding: 8px 4px; text-align: center; }
+@media (max-height: 650px) {
+  .debrief #actions { position: sticky; bottom: 0; padding-top: 6px; background: #302936; box-shadow: 0 15px #302936; }
+}
+@media (min-width: 510px) and (max-height: 430px) {
+  .debrief #earnings { display: grid; grid-template-columns: 1fr 1fr; align-content: start; }
+  .debrief .earnings-total, .debrief #earnedBreakdown, .debrief .aircraft-record { grid-column: 1; }
+  .debrief .earnings-total { align-items: center; flex-wrap: wrap; }
+  .debrief .damage-report { grid-area: 1 / 2 / span 3; border-top: 0; border-left: 1px solid #665463; }
+}
 @media (max-height: 430px) {
   .debrief { padding: 6px 10px; }
   .debrief .panel { max-height: 100%; }

@@ -71,6 +71,10 @@ window.PatrolHangar = (() => {
     }));
     return { version: 2, credits: Number.isSafeInteger(saved?.credits) && saved.credits >= 0 ? saved.credits : 0,
       ships, fleet: ranksFor(fleetParts, saved?.fleet),
+      bestEarnings: Object.fromEntries(Object.keys(ships).map(id => {
+        const best = saved?.bestEarnings?.[id];
+        return [id, Number.isSafeInteger(best) && best > 0 ? best : 0];
+      })),
       looks: Object.fromEntries(Object.keys(ships).map(id => [id, restoreLook(saved?.looks?.[id])])) };
   }
   let career = restore(null);
@@ -137,13 +141,15 @@ window.PatrolHangar = (() => {
     return { flight, combat, missions, bonus, total: flight + combat + missions + bonus };
   }
   function deposit(game, bill) {
-    const ledger = game.creditLedger;
+    const ledger = game.creditLedger, frameId = game.player.frame.id;
     return transact(profile => {
       const due = Math.max(0, bill.total - ledger.paid);
-      if (due) {
-        save({ ...profile, credits: profile.credits + due });
+      const best = Math.max(profile.bestEarnings[frameId], bill.total);
+      if (due || best > profile.bestEarnings[frameId]) {
+        save({ ...profile, credits: profile.credits + due, bestEarnings: { ...profile.bestEarnings, [frameId]: best } });
         ledger.paid += due;
       }
+      return best;
     });
   }
   return { read, purchase, equipFinish, deposit, statement, partsFor, fleetParts, cosmetics, get sessionOnly() { return sessionOnly; } };

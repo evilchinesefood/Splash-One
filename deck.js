@@ -168,6 +168,8 @@ window.PatrolDeck = (() => {
             stats.append(stat);
           }
           card.append(stats);
+          const best = profile.bestEarnings[key];
+          if (best) copy.append(node("span", "choice-record", "Best patrol · " + best.toLocaleString("en-US") + " cr"));
         }
         card.onclick=()=>{
           dialog.close();

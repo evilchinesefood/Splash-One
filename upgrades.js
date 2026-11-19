@@ -311,6 +311,10 @@ window.PatrolUpgrades = (() => {
     return el;
   }
 
+  function formatValue(value) {
+    return typeof value === "number" ? String(Number(value.toFixed(2))) : value;
+  }
+
   function show(actions, choices, choose, options = {}) {
     actions.replaceChildren();
     actions.style.setProperty("--choice-count", choices.length);
@@ -328,6 +332,17 @@ window.PatrolUpgrades = (() => {
       art.append(illustration(style));
       card.append(art, element("span", "gear-level", change), element("strong", "gear-name", item.name),
         element("span", "gear-detail", item.description));
+      const stats = element("span", "gear-stats", "");
+      for (const {label, before, after} of item.changes) {
+        const row = element("span", "gear-stat", "");
+        const values = element("span", "gear-values", "");
+        values.append(element("span", "gear-before", formatValue(before)), document.createTextNode(" → "),
+          element("b", "gear-after", formatValue(after)));
+        row.append(element("span", "gear-label", label), values);
+        stats.append(row);
+      }
+      card.append(stats);
+      if (item.focus) card.append(element("span", "gear-focus", item.focus));
       card.onclick = () => {
         if (committed) return;
         committed = true;

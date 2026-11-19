@@ -4,11 +4,15 @@ const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 
-function patrol(save = {}) {
+function patrol(save = {}, random) {
   const storage = new Map(Object.entries(save));
   const env = vm.createContext({ window: {}, navigator: {}, localStorage: {
     getItem: key => storage.get(key) ?? null, setItem: (key, value) => storage.set(key, value),
   } });
+  if (random) {
+    env.random = random;
+    vm.runInContext("Math.random = random", env);
+  }
   for (const file of ["game.js", "hangar.js"]) {
     vm.runInContext(fs.readFileSync(path.join(__dirname, "..", file), "utf8"), env);
   }
@@ -156,4 +160,103 @@ test("a finish is bought once per aircraft, equipped separately and retained wit
   assert.equal(profile.looks.manta.owned.paint.includes("crimson"), false);
   assert.equal(profile.ships.needle.speed, 2);
   assert.equal(profile.fleet.reroll, 1);
+});
+
+test("each offensive weapon gets only the HP it removes, including splash and support", () => {
+  function exercise(id, layout, input = {}) {
+    const { game } = patrol({}, () => 0.2);
+    game.start();
+    const targets = layout.map(([x, z, hp], i) => ({ id: i, kind: "relay", ground: true,
+      x, y: game.player.y, z, hp, speed: 0, yaw: 0, radius: 12, age: 0, fireIn: 100 }));
+    game.enemies = targets.slice();
+    if (id === "none" && input.missile) {
+      game.lockTarget = targets[0];
+      game.lockProgress = 1;
+    }
+    if (Object.hasOwn(game.upgrades, id)) game.upgrades[id] = 1;
+    if (id === "ally") game.pickup = { kind: "squadron", ...position(game.player), expires: 20 };
+    for (let i = 0; i < 130 && game.state === "playing"; i++) {
+      game.step(step, { moved: true, brake: true, ...(i === 0 ? input : {}) });
+    }
+    const removed = targets.reduce((sum, e, i) => sum + layout[i][2] - e.hp, 0);
+    const credited = Object.values(game.damageByWeapon).reduce((sum, hp) => sum + hp, 0);
+    assert.ok(Math.abs(removed - credited) < 1e-6, id + " damage added up");
+    return game;
+  }
+  const primary = exercise("none", [[0, 210, 3]], { fire: true });
+  assert.equal(primary.damageByWeapon.cannon, 3);
+  const missile = exercise("none", [[5, 90, 14], [42, 90, 90]], { missile: true });
+  assert.ok(missile.damageByWeapon.missile > 14);
+  const wisps = exercise("wisps", [[100, 155, 8]]);
+  assert.equal(wisps.damageByWeapon.wisps, 8);
+  const tail = exercise("tail", [[0, -70, 12]]);
+  assert.equal(tail.damageByWeapon.tail, 12);
+  const salvo = exercise("salvo", [[-25, 145, 10]], { missile: true });
+  assert.equal(salvo.damageByWeapon.salvo, 10);
+  const arc = exercise("arc", [[0, 80, 4], [34, 80, 8]], { fire: true });
+  assert.equal(arc.damageByWeapon.cannon, 4);
+  assert.equal(arc.damageByWeapon.arc, 8);
+  const support = exercise("ally", [[90, 230, 9]]);
+  assert.equal(support.damageByWeapon.ally, 9);
+  assert.equal(support.kills, 0);
+  support.start();
+  assert.ok(Object.values(support.damageByWeapon).every(hp => hp === 0));
+});
+
+test("aircraft records retain the best single payout across retries, endless and other runs", async () => {
+  const { game, hangar } = patrol();
+  game.start(10, {}, "needle");
+  game.completedWaves = game.waveCount;
+  const victory = hangar.statement(game);
+  await Promise.all([hangar.deposit(game, victory), hangar.deposit(game, victory)]);
+  game.kills += 4;
+  const endless = hangar.statement(game);
+  await hangar.deposit(game, endless);
+  game.start(10, {}, "needle");
+  await hangar.deposit(game, hangar.statement(game));
+  game.start(10, {}, "manta");
+  game.kills = 2;
+  await hangar.deposit(game, hangar.statement(game));
+  const profile = hangar.read();
+  assert.deepEqual({ ...profile.bestEarnings }, { kestrel: 0, needle: endless.total, manta: 7 });
+  assert.equal(profile.credits, endless.total + 1 + 7);
+});
+
+test("every draft rank has a stat change, including the tuned gun and the last service offer", () => {
+  const { game } = patrol({ "patrol.hangar.v1": JSON.stringify(["comet", "arc"]) });
+  const caps = { wisps: 3, link: 2, cannon: 3, missiles: 3, shield: 3, tail: 3, guard: 3, siphon: 3, salvo: 3, comet: 2, arc: 2 };
+  for (const [id, max] of Object.entries(caps)) {
+    for (let rank = 0; rank < max; rank++) {
+      game.start(10, { cannon: 2, missiles: 1 }, "needle");
+      Object.assign(game.upgrades, caps, { [id]: rank });
+      const [first, second] = game.enemies.filter(e => e.mandatory);
+      hit(game, first);
+      hit(game, second);
+      const [choice] = game.choices;
+      assert.equal(choice.id, id);
+      assert.equal(choice.level, rank + 1);
+      assert.ok(choice.changes.length, id + " rank " + (rank + 1));
+      for (const { before, after } of choice.changes) assert.notEqual(before, after);
+      if (id === "cannon" && rank === 0) {
+        const [power] = choice.changes;
+        assert.deepEqual([power.before, power.after], [31, 36]);
+        assert.ok(game.choose(id));
+        game.step(step, { fire: true });
+        assert.equal(game.shots.find(s => s.kind === "cannon" && s.style === "needle").power, power.after);
+      }
+    }
+  }
+  game.start(10, { capacity: 2 });
+  Object.assign(game.upgrades, caps);
+  game.player.shield = 20;
+  game.player.missiles = 1;
+  const [first, second] = game.enemies.filter(e => e.mandatory);
+  hit(game, first);
+  hit(game, second);
+  const [service] = game.choices;
+  assert.equal(service.id, "service");
+  const [shield, missiles] = service.changes;
+  assert.deepEqual([shield.before, missiles.before], [game.player.shield, game.player.missiles]);
+  assert.ok(game.choose("service"));
+  assert.deepEqual([shield.after, missiles.after], [game.player.shield, game.player.missiles]);
 });

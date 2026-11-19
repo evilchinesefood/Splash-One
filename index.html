@@ -117,6 +117,18 @@
             </section>
             <section class="pause-card controls">
               <h3>Flight controls</h3>
+              <div class="flight-preferences">
+                <div class="volume-row mouse-preference">
+                  <label for="sensitivity">Mouse sensitivity</label><output id="sensitivityValue" for="sensitivity">100%</output>
+                  <input id="sensitivity" type="range" min="50" max="200" step="5" value="100" />
+                </div>
+                <label class="camera-preference" for="startingView">Starting camera
+                  <select id="startingView"><option value="chase">Chase cam</option><option value="cockpit">Cockpit</option><option value="north">North-up</option></select>
+                </label>
+                <label><input type="checkbox" id="invertPitch" /> Invert pitch</label>
+                <label><input type="checkbox" id="showLead" checked /> Show gun lead indicator</label>
+                <label class="touch-preference"><input type="checkbox" id="leftHanded" /> Left-handed touch controls</label>
+              </div>
               <dl class="bindings">
                 <div>
                   <dt>Steer</dt>
@@ -155,7 +167,7 @@
                 <input id="captureMouse" type="checkbox" checked /> Keep mouse inside game
               </label>
               <ul class="touch-guide">
-                <li><b>Steer</b> with the left stick.</li>
+                <li><b>Steer</b> with the <span id="stickSide">left</span> stick.</li>
                 <li><b>Hold <span id="touchPrimaryHint">Cannon</span>.</b> Slide onto Missile to fire both.</li>
                 <li><b>Hold</b> Boost or Brake. <b>Tap</b> Roll to evade.</li>
                 <li><b>Tap the camera name</b> to change views.</li>
@@ -176,6 +188,11 @@
           <div id="earnings" hidden>
             <div class="earnings-total"><span>Patrol earnings</span><strong id="earnedTotal"></strong></div>
             <dl id="earnedBreakdown"></dl>
+            <div class="aircraft-record"><span id="bestAirframe"></span><strong id="bestEarnings"></strong></div>
+            <section class="damage-report" aria-labelledby="damageTitle">
+              <h3 id="damageTitle">Damage by weapon</h3>
+              <dl id="damageBreakdown"></dl>
+            </section>
           </div>
           <div id="actions"></div>
           <div id="draftTools" aria-label="Fleet perks" hidden>

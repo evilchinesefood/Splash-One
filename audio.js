@@ -180,6 +180,11 @@ window.PatrolAudio = (() => {
     },
     hit() { voice("triangle", 1210, 455, 0.077, 0.24); },
     deflect() { voice("sine", 730, 325, 0.19, 0.35); voice("triangle", 1050, 470, 0.12, 0.15); },
+    shieldBreak() {
+      voice("noise", 6200, 850, .105, .8);
+      voice("triangle", 1770, 240, .24, .42);
+      voice("square", 980, 122, .13, .13, .038);
+    },
     hurt() { voice("sawtooth", 205, 75, 0.23, 0.23); voice("noise", 2100, 390, 0.22, 0.65); },
     radio() {
       voice("noise", 1950, 820, 0.065, 0.24);

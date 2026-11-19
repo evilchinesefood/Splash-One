@@ -4,6 +4,7 @@
   "use strict";
 
   const TAU = 2 * Math.PI;
+  const gunRoundLife = 1.64;
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const mix = (a, b, t) => a + (b - a) * t;
   const angle = (a) => Math.atan2(Math.sin(a), Math.cos(a));
@@ -33,88 +34,114 @@
     rapid: "Fly through the rapid-fire beacon to boost your cannon",
   };
   const rapidFireDuration = 12;
+  const freshDamageTotals = () => ({ cannon: 0, missile: 0, wisps: 0, tail: 0, salvo: 0, arc: 0 });
 
   const gear = {
     wisps: {
-      name: "Wing Wisps",
-      levels: [
-        "A gold wingmate fires on nearby enemies.",
-        "A second wisp joins the formation.",
-        "Four wisps. With Target Link, all focus your missile lock.",
-      ],
+      name: "Wing Wisps", max: 3,
+      description: "Wingmates fire at nearby targets.",
+      count: [0, 1, 2, 4],
+      stats(rank) { return { Wingmates: this.count[rank] }; },
     },
     link: {
-      name: "Target Link",
-      levels: [
-        "Acquire a missile lock faster and farther away. Max wisps follow your lock.",
-        "Widen the lock circle and accelerate acquisition again.",
-      ],
+      name: "Target Link", max: 2,
+      description: "Acquire missile locks in a wider cone.",
+      range: rank => 1350 + rank * 250,
+      lockRate: rank => 1.45 + rank * .55,
+      stats(rank) { return { "Lock range (m)": this.range(rank), "Lock time (s)": 1 / this.lockRate(rank) }; },
     },
     cannon: {
-      name: "Primary Tuning",
-      levels: [
-        "Your primary weapon deals more damage per round.",
-        "Increase the firing rate of your primary weapon.",
-        "Twin barrels fire together down the nose.",
-      ],
+      name: "Primary Tuning", max: 3,
+      description: "Tune your nose gun.",
+      power: (rank, frame) => frame.damage + (rank ? 5 : 0),
+      rate: (rank, frame) => frame.rate * (rank >= 2 ? 4 / 3 : 1),
+      barrels: rank => rank === 3 ? 2 : 1,
+      stats(rank, {player: {frame}}) {
+        return { "Round damage": this.power(rank, frame), "Base volleys/s": this.rate(rank, frame), Barrels: this.barrels(rank) };
+      },
     },
     missiles: {
-      name: "Hot Rails",
-      levels: [
-        "Missiles reload faster and hit harder.",
-        "Shorter reloads and a wider blast.",
-        "All four rails recharge in rapid succession.",
-      ],
+      name: "Hot Rails", max: 3,
+      description: "Upgrade all four missile rails.",
+      power: rank => 78 + rank * 17,
+      reload: (rank, loader) => 4.7 - rank * .82 - loader * .25,
+      radius: rank => 50 + rank * 10,
+      stats(rank, g) {
+        return { "Reload (s)": this.reload(rank, g.mods.missiles), "Direct damage": this.power(rank), "Blast radius (m)": this.radius(rank) };
+      },
     },
     shield: {
-      name: "Shield Bloom",
-      levels: [
-        "Shields begin recovering sooner.",
-        "Shield recovery also runs twice as fast.",
-        "An intact shield absorbs more damage per charge.",
-      ],
+      name: "Shield Bloom", max: 3,
+      description: "Recover between hits and absorb incoming fire.",
+      delay: rank => rank ? 3.3 : 5,
+      recovery: (rank, generator) => (rank >= 2 ? 22 : 11) + 2 * generator,
+      resistance: rank => rank === 3 ? 28 : 0,
+      stats(rank, g) {
+        return { "Recharge delay (s)": this.delay(rank), "Shield/s": this.recovery(rank, g.mods.shield), "Shield resist (%)": this.resistance(rank) };
+      },
     },
     tail: {
-      name: "Tail Spark",
-      levels: [
-        "A tail turret fires at pursuers within 320 m.",
-        "Reach 430 m and fire the rear turret more often.",
-        "Rapid rear fire reaches 540 m and hits harder.",
-      ],
+      name: "Tail Spark", max: 3,
+      description: "A rear turret fires at pursuers.",
+      range: rank => rank ? 210 + 110 * rank : 0,
+      delay: rank => 1.65 - rank * .29,
+      power: rank => rank === 3 ? 22 : 15,
+      stats(rank) { return { "Range (m)": this.range(rank), "Shot delay (s)": rank ? this.delay(rank) : "Off", "Shot damage": rank ? this.power(rank) : 0 }; },
     },
     guard: {
-      name: "Orbit Guard",
-      levels: [
-        "Disrupt one incoming shot every 3 seconds.",
-        "Detect incoming fire farther out. Recharge in 2 seconds.",
-        "Cancel up to two incoming shots every 1.5 seconds.",
-      ],
+      name: "Orbit Guard", max: 3,
+      description: "Intercept incoming rounds before they hit.",
+      delay: [0, 3, 2, 1.5],
+      count: [0, 1, 1, 2],
+      range: [0, 56, 88, 88],
+      stats(rank) { return { Intercepts: this.count[rank], "Recharge (s)": rank ? this.delay[rank] : "Off", "Range (m)": this.range[rank] }; },
     },
     siphon: {
-      name: "Kinetic Siphon",
-      levels: [
-        "Each target destroyed restores 4 shield points.",
-        "Each target destroyed restores 8 shield points.",
-        "Each target destroyed restores 12 shield points.",
-      ],
+      name: "Kinetic Siphon", max: 3,
+      description: "Your kills restore shield.",
+      recovery: rank => 4 * rank,
+      stats(rank) { return { "Shield per kill": this.recovery(rank) }; },
     },
     salvo: {
-      name: "Split Salvo",
-      levels: [
-        "Each missile release fires two extra bolts in a fan.",
-        "Four side bolts fan out with each missile.",
-        "With a missile lock, all four side bolts curve toward the target.",
-      ],
+      name: "Split Salvo", max: 3,
+      description: "Launch extra bolts with each missile.",
+      angles: [[], [-.13, .13], [-.28, -.12, .12, .28], [-.28, -.12, .12, .28]],
+      stats(rank) { return { "Side bolts": this.angles[rank].length, "Homing on lock": rank === 3 ? "On" : "Off" }; },
     },
     comet: {
-      name: "Comet Drive",
-      levels: ["Afterburner briefly supplies extra shield energy.", "Boost faster and regain more shield energy."],
+      name: "Comet Drive", max: 2,
+      description: "Engaging boost also restores shield once every 4 s.",
+      recovery: rank => 6 * rank,
+      topSpeed: (rank, frame) => frame.boost + rank * 14,
+      stats(rank, g) { return { "Boost (m/s)": this.topSpeed(rank, g.player.frame), "Shield on boost": this.recovery(rank) }; },
     },
     arc: {
-      name: "Arc Echo",
-      levels: ["Cannon hits can arc to a second nearby enemy.", "Echoes jump farther and strike harder."],
+      name: "Arc Echo", max: 2,
+      description: "Gun hits have a 45% chance to arc to another target.",
+      range: rank => rank ? 150 + rank * 65 : 0,
+      power: rank => rank ? 6 + rank * 5 : 0,
+      stats(rank) { return { "Jump range (m)": this.range(rank), "Arc damage": this.power(rank) }; },
     },
   };
+
+  function focusHint(id, g) {
+    if (id !== "link" && id !== "wisps") return "";
+    const partner = id === "link" ? "wisps" : "link";
+    const partnerRank = g.upgrades[partner];
+    const partnerName = gear[partner].name;
+    const nextWisps = g.upgrades.wisps + (id === "wisps" ? 1 : 0);
+    const hasLink = g.upgrades.link > 0 || id === "link";
+    if (nextWisps >= 3 && hasLink) return partnerName + " aboard. Four wisps focus your lock.";
+    if (g.banished.has(partner) && (partner === "wisps" || !partnerRank)) return partnerName + " banished. Focus unavailable.";
+    if (id === "wisps") return (partnerRank ? "Target Link aboard." : "Add Target Link.") + " Rank 3 wisps focus your lock.";
+    if (!partnerRank) return "Add rank 3 Wing Wisps to focus your lock.";
+    return "Wing Wisps rank " + partnerRank + " aboard. Rank 3 focuses your lock.";
+  }
+
+  function compareStats(current, next) {
+    return Object.keys(next).filter(label => current[label] !== next[label])
+      .map(label => ({ label, before: current[label], after: next[label] }));
+  }
   const discoveries = { comet: "Comet Drive", arc: "Arc Echo" };
   const storageKey = "patrol.hangar.v1";
 
@@ -243,6 +270,7 @@
       vy: 0,
       gForce: 1,
       hitFlash: 0,
+      hitFrom: null,
     });
     const g = {
       world,
@@ -269,6 +297,11 @@
       unlocks: saved,
       lockTarget: null,
       lockProgress: 0,
+      showGunLead: true,
+      get gunLead() {
+        const e = this.lockTarget;
+        return this.showGunLead && e && e.hp > 0 && !e.ground ? gunIntercept(this.player, e) : null;
+      },
       target: null,
       choices: [],
       midwaveDraft: false,
@@ -280,6 +313,7 @@
       lastReward: "",
       completedWaves: 0,
       creditLedger: { paid: 0 },
+      damageByWeapon: freshDamageTotals(),
       mods: { cannon: 0, shield: 0, missiles: 0 },
       kills: 0,
       endless: false,
@@ -356,6 +390,7 @@
         state: "playing",
         completedWaves: 0,
         creditLedger: { paid: 0 },
+        damageByWeapon: freshDamageTotals(),
         mods: { cannon: 0, shield: 0, missiles: 0, ...installed },
         endless: false,
         upgrades: Object.fromEntries(Object.keys(gear).map((id) => [id, 0])),
@@ -598,7 +633,7 @@
     }
     function eligibleGear() {
       return Object.keys(gear).filter(
-        (id) => !g.banished.has(id) && (!discoveries[id] || g.unlocks.includes(id)) && g.upgrades[id] < gear[id].levels.length,
+        (id) => !g.banished.has(id) && (!discoveries[id] || g.unlocks.includes(id)) && g.upgrades[id] < gear[id].max,
       );
     }
     function draftChoices(previous = []) {
@@ -616,18 +651,25 @@
             id: "service",
             name: "Pit Service",
             level: 1,
-            description: "Recharge the shield and reload all four missile rails.",
+            description: "Recharge the shield and reload every rail.",
+            changes: [
+              { label: "Shield", before: g.player.shield, after: g.player.frame.maxShield },
+              { label: "Missiles", before: g.player.missiles, after: 4 },
+            ],
           },
         ];
       return ids.map(offer);
     }
     function offer(id) {
       offered[id] = (offered[id] || 0) + 1;
+      const item = gear[id], rank = g.upgrades[id];
       return {
         id,
-        name: gear[id].name,
-        level: g.upgrades[id] + 1,
-        description: gear[id].levels[g.upgrades[id]],
+        name: item.name,
+        level: rank + 1,
+        description: item.description,
+        changes: compareStats(item.stats(rank, g), item.stats(rank + 1, g)),
+        get focus() { return focusHint(id, g); },
       };
     }
     function reroll() {
@@ -715,7 +757,7 @@
       let x = steering ? clamp(input.x || 0, -1, 1) : 0;
       let y = steering ? clamp(input.y || 0, -1, 1) : 0;
       let turn = x * 1.5,
-        climb = y * 0.91;
+        climb = y * (input.invertPitch ? -0.91 : 0.91);
       if (steering && g.view === 2) {
         const magnitude = Math.min(1, Math.hypot(x, y) * 1.5);
         turn = magnitude < 0.08 ? 0 : clamp(angle(Math.atan2(x, y) - p.yaw) * 2.6, -1.7, 1.7) * magnitude;
@@ -728,11 +770,11 @@
       const boost = !!input.boost && !p.brake && !title;
       if (boost && !p.boost && g.time - enteredBoost > 4) {
         enteredBoost = g.time;
-        if (g.upgrades.comet) p.shield = Math.min(p.frame.maxShield, p.shield + 6 * g.upgrades.comet);
+        if (g.upgrades.comet) p.shield = Math.min(p.frame.maxShield, p.shield + gear.comet.recovery(g.upgrades.comet));
       }
       p.boost = boost;
       const cruise = p.brake ? p.frame.cruise * (60 / 112) : p.frame.cruise;
-      p.speed = ease(p.speed, boost ? p.frame.boost + (g.upgrades.comet || 0) * 14 : cruise, 1.4, dt);
+      p.speed = ease(p.speed, boost ? gear.comet.topSpeed(g.upgrades.comet || 0, p.frame) : cruise, 1.4, dt);
       turn *= p.frame.handling;
       p.yaw = angle(p.yaw + turn * dt);
       const sy = Math.sin(p.yaw),
@@ -760,9 +802,9 @@
       p.vy = ease(p.vy, (p.y - oldY) / dt, 4, dt);
       p.gForce = Math.sqrt(1 + ((turn * p.speed) / 60) ** 2);
       p.hitFlash = Math.max(0, p.hitFlash - dt * 2);
-      if (g.time - lastDamage > 5 - (g.upgrades.shield ? 1.7 : 0)) {
+      if (g.time - lastDamage > gear.shield.delay(g.upgrades.shield)) {
         const was = p.shield;
-        p.shield = Math.min(p.frame.maxShield, p.shield + dt * ((g.upgrades.shield >= 2 ? 22 : 11) + 2 * g.mods.shield));
+        p.shield = Math.min(p.frame.maxShield, p.shield + dt * gear.shield.recovery(g.upgrades.shield, g.mods.shield));
         if (was < p.frame.maxShield && p.shield === p.frame.maxShield) sound("shield");
       }
     }
@@ -804,6 +846,7 @@
         }
         if (reason) {
           p.shield = p.hull = 0;
+          p.hitFrom = null;
           p.hitFlash = 1;
           loseAircraft(reason);
           impact(x, Math.max(y, surface), z, 21, y <= surface);
@@ -870,9 +913,12 @@
         sound(wet ? "splash" : "boom");
       }
     }
-    function damage(e, amount, allied = false) {
+    function damage(e, amount, weapon) {
       if (e.hp <= 0) return;
-      e.hp -= amount;
+      const removed = Math.min(e.hp, amount);
+      g.damageByWeapon[weapon] += removed;
+      e.hp -= removed;
+      const allied = weapon === "ally";
       e.hitFlash = 0.23;
       if (e.hp > 0) {
         particle("spark", e.x, e.y, e.z, 0.25, 3, 5, 12);
@@ -880,7 +926,7 @@
       }
       if (!allied) g.kills++;
       if (!allied && g.upgrades.siphon && g.player.hull > 0 && g.player.shield < g.player.frame.maxShield) {
-        g.player.shield = Math.min(g.player.frame.maxShield, g.player.shield + 4 * g.upgrades.siphon);
+        g.player.shield = Math.min(g.player.frame.maxShield, g.player.shield + gear.siphon.recovery(g.upgrades.siphon));
         sound("shield");
       }
       impact(e.x, e.y, e.z, e.kind === "carrier" ? 39 : 13, groundUnit(e) || e.boat);
@@ -890,20 +936,22 @@
         updateObjective();
       }
     }
-    function hurt(amount) {
+    function hurt(amount, shot) {
       const p = g.player;
       if (g.state !== "playing") return;
       if (p.roll && rollClock > 0.17 && rollClock < 0.63) return;
-      const absorb = Math.min(p.shield, amount * (g.upgrades.shield === 3 ? 0.72 : 1));
-      const leak = Math.max(0, amount - absorb / (g.upgrades.shield === 3 ? 0.72 : 1));
+      const shieldCost = 1 - gear.shield.resistance(g.upgrades.shield) / 100;
+      const absorb = Math.min(p.shield, amount * shieldCost);
+      const leak = Math.max(0, amount - absorb / shieldCost);
       p.shield = Math.max(0, p.shield - absorb);
       if (leak > 0.01) {
         p.hull = Math.max(0, p.hull - leak / p.frame.armor);
         bonusIntact = false;
       }
       p.hitFlash = 1;
+      p.hitFrom = [-shot.vx, -shot.vy, -shot.vz];
       lastDamage = g.time;
-      sound(leak > 0.01 ? "hurt" : "deflect");
+      sound(absorb > 0 && p.shield === 0 ? "shieldBreak" : leak > 0.01 ? "hurt" : "deflect");
       if (p.hull <= 0) {
         loseAircraft("Aircraft lost");
         impact(p.x, p.y, p.z, 21);
@@ -941,9 +989,9 @@
       return true;
     }
 
-    function shot(kind, src, f, speed, power, life, target = null) {
+    function shot(kind, src, f, speed, power, life, target = null, weapon = kind) {
       const s = {
-        kind,
+        kind, weapon,
         x: src.x,
         y: src.y,
         z: src.z,
@@ -977,7 +1025,7 @@
           near = e;
           nearD = d;
         }
-        if (d > 1350 + link * 250 || d < 2) continue;
+        if (d > gear.link.range(link) || d < 2) continue;
         const dot = ((e.x - p.x) * f[0] + (e.y - p.y) * f[1] + (e.z - p.z) * f[2]) / d;
         const radius = Math.min(0.25, e.radius / d);
         if (dot < Math.cos(0.32 + radius + link * 0.052 + (e === g.lockTarget ? 0.085 : 0))) continue;
@@ -997,9 +1045,31 @@
         g.lockProgress = 0;
       }
       if (best && g.lockProgress < 1) {
-        g.lockProgress = Math.min(1, g.lockProgress + dt * (1.45 + 0.55 * link));
+        g.lockProgress = Math.min(1, g.lockProgress + dt * gear.link.lockRate(link));
         if (g.lockProgress === 1) sound("lock");
       }
+    }
+    function gunMuzzle(p, f, side = 0) {
+      const length = p.frame.nose + 1;
+      return {
+        x: p.x + f[0] * length + Math.cos(p.yaw) * side,
+        y: p.y + f[1] * length - .65,
+        z: p.z + f[2] * length - Math.sin(p.yaw) * side,
+      };
+    }
+    function gunIntercept(p, target) {
+      const { vx, vy, vz } = target;
+      const velocity2 = vx * vx + vy * vy + vz * vz;
+      if (!(velocity2 > 1)) return null;
+      const muzzle = gunMuzzle(p, forward(p));
+      const x = target.x - muzzle.x, y = target.y - muzzle.y, z = target.z - muzzle.z;
+      const distance2 = x * x + y * y + z * z;
+      const closing = x * vx + y * vy + z * vz;
+      const speed = p.speed + p.frame.shotSpeed;
+      // Solve |offset + velocity * t| = round speed * t for the first arrival.
+      const t = distance2 / (Math.sqrt(closing * closing + (speed * speed - velocity2) * distance2) - closing);
+      if (!(t > 0 && t < gunRoundLife)) return null;
+      return { x: target.x + vx * t, y: target.y + vy * t, z: target.z + vz * t };
     }
     function fireWeapons(dt, input) {
       const p = g.player,
@@ -1008,27 +1078,23 @@
         rail = g.upgrades.missiles;
       shotTimer = shotTimer > 0 ? shotTimer - dt : 0;
       if (input.fire && shotTimer <= 0) {
-        const sides = cannon === 3 ? [-4, 4] : [0];
+        const sides = gear.cannon.barrels(cannon) === 2 ? [-4, 4] : [0];
         const specialty = g.mods.specialty || 0;
         volley++;
         if (p.frame.id === "kestrel" && specialty && volley % (7 - specialty) === 0) sides.push(-6, 6);
         for (const offset of sides) {
-          const nose = {
-            x: p.x + f[0] * (p.frame.nose + 1) + Math.cos(p.yaw) * offset,
-            y: p.y + f[1] * (p.frame.nose + 1) - 0.65,
-            z: p.z + f[2] * (p.frame.nose + 1) - Math.sin(p.yaw) * offset,
-          };
+          const nose = gunMuzzle(p, f, offset);
           const frame = p.frame;
-          const power = frame.damage + (cannon ? 5 : 0);
+          const power = gear.cannon.power(cannon, frame);
           const arc = .085 * (1 - .15 * specialty);
           for (const spread of frame.id === "manta" ? [-arc, 0, arc] : [0]) {
             const direction = spread ? forward({ yaw: p.yaw + spread, pitch: p.pitch }) : f;
-            const round = shot("cannon", nose, direction, p.speed + frame.shotSpeed, power, 1.64);
+            const round = shot("cannon", nose, direction, p.speed + frame.shotSpeed, power, gunRoundLife);
             round.style = frame.id;
             if (frame.id === "needle") round.pierced = new Set();
           }
         }
-        const volleysPerSecond = p.frame.rate * (cannon >= 2 ? 4 / 3 : 1);
+        const volleysPerSecond = gear.cannon.rate(cannon, p.frame);
         shotTimer += 1 / (volleysPerSecond * (g.rapidFireRemaining > 0 ? 2 : 1));
         sound(p.frame.id === "kestrel" ? "cannon" : p.frame.id);
       }
@@ -1036,7 +1102,7 @@
         const locked = g.lockProgress >= 1 && g.lockTarget && g.lockTarget.hp > 0 ? g.lockTarget : null;
         const side = p.missiles % 2 ? -5 : 5;
         const wing = { x: p.x + Math.cos(p.yaw) * side, y: p.y - 1.7, z: p.z - Math.sin(p.yaw) * side };
-        const s = shot("missile", wing, f, p.speed + 238, 78 + rail * 17, 6.5, locked);
+        const s = shot("missile", wing, f, p.speed + 238, gear.missiles.power(rail), 6.5, locked);
         if (!locked && Math.abs(p.pitch) < 0.18) {
           const reach = clamp(380 + p.y * 0.65, 460, 1100);
           s.destination = { x: p.x + f[0] * reach, z: p.z + f[2] * reach };
@@ -1044,10 +1110,10 @@
         }
         if (g.upgrades.salvo) {
           const level = g.upgrades.salvo;
-          const angles = level === 1 ? [-0.13, 0.13] : [-0.28, -0.12, 0.12, 0.28];
+          const angles = gear.salvo.angles[level];
           for (const offset of angles) {
             const direction = forward({ yaw: p.yaw + offset, pitch: p.pitch });
-            shot("wisp", wing, direction, p.speed + 435, 17, 2.4, level === 3 ? locked : null);
+            shot("wisp", wing, direction, p.speed + 435, 17, 2.4, level === 3 ? locked : null, "salvo");
           }
         }
         p.missiles--;
@@ -1055,7 +1121,7 @@
       }
       if (p.missiles < 4) {
         recharge += dt;
-        if (recharge >= 4.7 - rail * 0.82 - g.mods.missiles * 0.25) {
+        if (recharge >= gear.missiles.reload(rail, g.mods.missiles)) {
           p.missiles++;
           recharge = 0;
         }
@@ -1065,7 +1131,7 @@
       const level = g.upgrades.tail;
       if (!level || g.time < tailReady) return;
       const p = g.player, f = forward(p);
-      let target = null, reach = 210 + 110 * level;
+      let target = null, reach = gear.tail.range(level);
       for (const e of g.enemies) {
         const d = distance(p, e);
         const ahead = (e.x - p.x) * f[0] + (e.y - p.y) * f[1] + (e.z - p.z) * f[2];
@@ -1076,22 +1142,22 @@
       }
       if (target) {
         const rear = { x: p.x - f[0] * 9, y: p.y - f[1] * 9 + 2, z: p.z - f[2] * 9 };
-        shot("wisp", rear, aim(rear, target), 420, level === 3 ? 22 : 15, 2, target);
+        shot("wisp", rear, aim(rear, target), 420, gear.tail.power(level), 2, target, "tail");
         sound("wisp");
       }
-      tailReady = g.time + (target ? 1.65 - level * 0.29 : 0.12);
+      tailReady = g.time + (target ? gear.tail.delay(level) : 0.12);
     }
     function orbitGuard() {
       const level = g.upgrades.guard;
       if (!level || g.time < guardReady) return;
-      const p = g.player, f = forward(p), range = level === 1 ? 56 : 88;
+      const p = g.player, f = forward(p), range = gear.guard.range[level];
       // Prefer the closest closing projectile; outgoing shots leave the pulse available.
       const closing = g.shots.filter(s => {
         if (s.kind !== "enemy" || distance(p, s) > range) return false;
         return (s.x - p.x) * (s.vx - f[0] * p.speed)
           + (s.y - p.y) * (s.vy - f[1] * p.speed)
           + (s.z - p.z) * (s.vz - f[2] * p.speed) < 0;
-      }).sort((a, b) => distance(p, a) - distance(p, b)).slice(0, level === 3 ? 2 : 1);
+      }).sort((a, b) => distance(p, a) - distance(p, b)).slice(0, gear.guard.count[level]);
       if (!closing.length) return;
       for (const s of closing) {
         g.shots.splice(g.shots.indexOf(s), 1);
@@ -1099,10 +1165,11 @@
         particle("spark", s.x, s.y, s.z, 0.2, 3, 12, 3);
         particle("spark", s.x, s.y, s.z, 0.2, 3, -12, 3);
       }
-      guardReady = g.time + [0, 3, 2, 1.5][level];
+      guardReady = g.time + gear.guard.delay[level];
       sound("wisp");
     }
     function launchSupport(target) {
+      g.damageByWeapon.ally ??= 0;
       const p = g.player;
       // Set one crossing course for the whole squadron at collection time.
       const yaw = Math.atan2(target.x - p.x, target.z - p.z) + 0.42;
@@ -1192,7 +1259,7 @@
     function updateWisps(dt) {
       const p = g.player,
         level = g.upgrades.wisps || 0;
-      const n = [0, 1, 2, 4][level];
+      const n = gear.wisps.count[level];
       while (g.wisps.length < n)
         g.wisps.push({ x: p.x, y: p.y, z: p.z, cooldown: 0.3 + g.wisps.length * 0.27, phase: 0 });
       g.wisps.forEach((w, i) => {
@@ -1216,7 +1283,7 @@
             }
           }
         if (nearest && nearest.hp > 0 && distance(w, nearest) < (focus ? 1900 : 515)) {
-          shot("wisp", w, aim(w, nearest), 450, 10, 4.4, nearest);
+          shot("wisp", w, aim(w, nearest), 450, 10, 4.4, nearest, "wisps");
           w.cooldown = 1.45;
           sound("wisp");
         }
@@ -1229,6 +1296,7 @@
         e.age += dt;
         e.hitFlash = Math.max(0, e.hitFlash - dt);
         const d = distance(p, e);
+        const oldX = e.x, oldY = e.y, oldZ = e.z;
         if (e.boat) sail(e, dt);
         else if (!groundUnit(e)) {
           let wanted, altitude;
@@ -1283,6 +1351,9 @@
           e.y = Math.max(e.y + dy * dt, world.height(e.x, e.z) + 20);
           e.pitch = Math.atan2(dy, e.speed);
         }
+        e.vx = (e.x - oldX) / dt;
+        e.vy = (e.y - oldY) / dt;
+        e.vz = (e.z - oldZ) / dt;
         const prism = e.kind === "prism", bomber = e.kind === "bomber";
         const inRange = d < (prism ? 850 : e.ground ? 700 : 840);
         // A tower just entering range must give the entire charge warning.
@@ -1362,15 +1433,15 @@
       s.x += dx * first;
       s.y += dy * first;
       s.z += dz * first;
-      if (hit === g.player) hurt(s.power);
+      if (hit === g.player) hurt(s.power, s);
       else if (hit) {
-        damage(hit, s.power, s.kind === "ally");
+        damage(hit, s.power, s.weapon || s.kind);
         if (s.kind === "cannon") {
           sound("hit");
           const level = g.upgrades.arc;
           if (level && Math.random() < 0.45) {
-            const near = g.enemies.find((e) => e !== hit && e.hp > 0 && distance(hit, e) < 150 + level * 65);
-            if (near) shot("wisp", s, aim(s, near), 560, 6 + level * 5, 1.3, near);
+            const near = g.enemies.find((e) => e !== hit && e.hp > 0 && distance(hit, e) < gear.arc.range(level));
+            if (near) shot("wisp", s, aim(s, near), 560, gear.arc.power(level), 1.3, near, "arc");
           }
         }
       }
@@ -1380,10 +1451,10 @@
       }
       if (s.kind === "missile") {
         impact(s.x, hit ? s.y : floor + 0.3, s.z, 15, !hit);
-        const range = 50 + 10 * g.upgrades.missiles;
+        const range = gear.missiles.radius(g.upgrades.missiles);
         for (const e of g.enemies) {
           const reach = distance(s, e) - e.radius;
-          if (e !== hit && e.hp > 0 && reach < range) damage(e, s.power * 0.6 * (1 - Math.max(0, reach) / range));
+          if (e !== hit && e.hp > 0 && reach < range) damage(e, s.power * 0.6 * (1 - Math.max(0, reach) / range), "missile");
         }
       } else if (!hit && s.kind !== "enemy") impact(s.x, floor + 0.3, s.z, 2.5, true);
       return true;
