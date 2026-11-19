@@ -38,11 +38,19 @@ window.PatrolBindings = (() => {
     let map = read(), listening = null;
     const title = document.createElement("h3"), note = document.createElement("p"), status = document.createElement("p");
     title.textContent = "Keyboard and mouse";
-    note.textContent = "Steer with the mouse. Choose a binding, then press a key or click it with a mouse button. Esc cancels an edit and always pauses in flight.";
+    note.textContent = "Select a slot, then press a key or click the slot with a mouse button. Esc always pauses in flight.";
     status.className = "binding-status";
     status.setAttribute("role", "status");
     const grid = document.createElement("div");
     grid.className = "binding-grid";
+    const headings = document.createElement("div");
+    headings.className = "binding-headings";
+    for (const text of ["Action", "Primary", "Alternate"]) {
+      const column = document.createElement("span");
+      column.textContent = text;
+      headings.append(column);
+    }
+    grid.append(headings);
     const buttons = [];
     const reset = document.createElement("button");
     reset.type = "button";
@@ -57,6 +65,7 @@ window.PatrolBindings = (() => {
       for (const { id, slot, button } of buttons) {
         const code = map[id][slot];
         button.textContent = listening?.button === button ? "Listening…" : code ? label(code) : "+ Add";
+        button.classList.toggle("unassigned", !code);
         button.setAttribute("aria-pressed", String(listening?.button === button));
         button.setAttribute("aria-label", actions[id][0] + ", " + (slot ? "alternate" : "first") + " binding, " + (code ? label(code) : "unassigned"));
       }
@@ -84,9 +93,11 @@ window.PatrolBindings = (() => {
       save(actions[id][0] + " assigned to " + label(code) + ".");
     }
     for (const [id, [title]] of Object.entries(actions)) {
-      const name = document.createElement("span");
+      const row = document.createElement("div"), name = document.createElement("span");
+      row.className = "binding-row";
       name.textContent = title;
-      grid.append(name);
+      row.append(name);
+      grid.append(row);
       for (let slot = 0; slot < 2; slot++) {
         const button = document.createElement("button");
         button.type = "button";
@@ -98,7 +109,8 @@ window.PatrolBindings = (() => {
             return;
           }
           listening = binding;
-          status.textContent = "Listening for " + title.toLowerCase() + ". Delete clears this slot.";
+          row.append(status);
+          status.textContent = map[id][1 - slot] ? "Press an input. Esc cancels. Delete clears this slot." : "Press an input. Esc cancels.";
           draw();
         });
         button.addEventListener("mousedown", event => {
@@ -108,10 +120,14 @@ window.PatrolBindings = (() => {
           }
         });
         button.addEventListener("blur", () => { if (listening === binding) cancel(); });
-        grid.append(button);
+        row.append(button);
       }
     }
-    reset.onclick = () => { map = defaults(); save("Default controls restored."); };
+    reset.onclick = () => {
+      editor.append(status);
+      map = defaults();
+      save("Default controls restored.");
+    };
     draw();
     function capture(event) {
       if (!listening) return false;

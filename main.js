@@ -113,6 +113,7 @@ const patrol = (() => {
     $("stickSide").textContent = left ? "right" : "left";
     $("sensitivityValue").textContent = sensitivity.value + "%";
     sensitivity.setAttribute("aria-valuetext", sensitivity.value + "%");
+    sensitivity.style.setProperty("--level", (sensitivity.valueAsNumber - 50) / 150 * 100 + "%");
     input.invertPitch = $("invertPitch").checked;
     if (g) g.showGunLead = $("showLead").checked;
   }
@@ -215,9 +216,9 @@ const patrol = (() => {
   }
   function syncSoundButton() {
     const enabled = PatrolAudio.enabled;
-    $("audio").innerHTML = '<span id="audioIcon">♪</span> Sound ' + (enabled ? "on" : "off");
+    $("audioState").textContent = enabled ? "On" : "Off";
     $("audio").setAttribute("aria-pressed", String(enabled));
-    $("music").textContent = "Music " + (PatrolAudio.musicEnabled ? "on" : "off");
+    $("musicState").textContent = PatrolAudio.musicEnabled ? "On" : "Off";
     $("music").setAttribute("aria-pressed", String(PatrolAudio.musicEnabled));
   }
   $("music").onclick = () => {
@@ -231,6 +232,7 @@ const patrol = (() => {
     function showLevel() {
       value.textContent = slider.value + "%";
       slider.setAttribute("aria-valuetext", value.textContent);
+      slider.style.setProperty("--level", value.textContent);
     }
     slider.oninput = () => {
       PatrolAudio.setVolume(name, slider.valueAsNumber);
@@ -740,6 +742,7 @@ const patrol = (() => {
     clearInput();
     carry = 0;
     sync();
+    if (!paused) $("pause").focus({ preventScroll: true });
   }
   $("pause").onclick = pause;
   $("currentView").onchange = () => changeView(cameraIds.indexOf($("currentView").value));
@@ -768,7 +771,41 @@ const patrol = (() => {
     row.append(PatrolUpgrades.icon(icon, 56), text);
     return row;
   }
-  const pauseTabs = [...$("pauseTabs").querySelectorAll('[role="tab"]')];
+  const pauseTabList = $("pauseTabs");
+  const pauseTabs = [...pauseTabList.querySelectorAll('[role="tab"]')];
+  const verticalPauseTabs = matchMedia("(min-width: 900px) and (min-height: 540px)");
+  function orientPauseTabs() {
+    pauseTabList.setAttribute("aria-orientation", verticalPauseTabs.matches ? "vertical" : "horizontal");
+  }
+  orientPauseTabs();
+  verticalPauseTabs.addEventListener("change", orientPauseTabs);
+  $("modal").addEventListener("keydown", event => {
+    if (!paused || event.key !== "Tab" || event.altKey || event.ctrlKey || event.metaKey) return;
+    const selected = pauseTabs.find(tab => tab.tabIndex === 0);
+    const last = $("actions").lastElementChild;
+    if (event.shiftKey ? event.target !== selected : event.target !== last) return;
+    event.preventDefault();
+    (event.shiftKey ? last : selected).focus({ preventScroll: true });
+  });
+  const tabGlyphs = {
+    tabEquipment: ["000111111000","001100001100","011111111110","110000000011","111111111111","110011110011","110001100011","110000000011","011111111110"],
+    tabWave:      ["110000000000","111111100000","111111111110","111000111110","110000111100","110000000000","110000000000","110000000000","110000000000"],
+    tabControls:  ["000110011000","001111111100","011000000110","110100001011","111110010011","110100000011","110001100011","111110011111","011100001110"],
+    tabSettings:  ["000110000000","111111111111","000110000000","000000000000","000000011000","111111111111","000000011000","000000000000","000110000000","111111111111","000110000000"],
+  };
+  for (const tab of pauseTabs) {
+    const icon = document.createElement("canvas");
+    icon.width = icon.height = 16;
+    icon.setAttribute("aria-hidden", "true");
+    const ctx = icon.getContext("2d");
+    const glyph = tabGlyphs[tab.id];
+    const top = Math.floor((16 - glyph.length) / 2);
+    ctx.fillStyle = "#e3e5d9";
+    glyph.forEach((row, y) => [...row].forEach((bit, x) => {
+      if (bit === "1") ctx.fillRect(x + 2, y + top, 1, 1);
+    }));
+    tab.prepend(icon);
+  }
   function selectPauseTab(tab) {
     bindings.cancel();
     for (const item of pauseTabs) {
@@ -787,6 +824,10 @@ const patrol = (() => {
         ArrowLeft: (index + last) % pauseTabs.length, ArrowRight: (index + 1) % pauseTabs.length,
         Home: 0, End: last,
       };
+      if (verticalPauseTabs.matches) {
+        destinations.ArrowUp = destinations.ArrowLeft;
+        destinations.ArrowDown = destinations.ArrowRight;
+      }
       if (!Object.hasOwn(destinations, event.key)) return;
       event.preventDefault();
       event.stopPropagation();
@@ -796,12 +837,21 @@ const patrol = (() => {
     });
   }
   function showEquipment() {
-    const frame = g.player.frame;
+    const p = g.player, frame = p.frame;
+    $("pausePortrait").replaceChildren(PatrolArt.aircraftPortrait(frame.id, frame.look));
+    $("airframeClass").textContent = workshops[frame.id].title;
+    $("airframeName").textContent = frame.name;
+    for (const [id, value, max] of [["pauseShield", p.shield, frame.maxShield], ["pauseHull", p.hull, frame.maxHull]]) {
+      $(id).textContent = Math.ceil(value) + " / " + max;
+      const meter = $(id + "Meter");
+      meter.max = max;
+      meter.value = value;
+    }
     const primaryIcon = { needle: "arc", manta: "salvo" }[frame?.id] || "cannon";
     $("pilotLevel").textContent = "Pilot level " + pilotLevel();
     $("weapons").replaceChildren(
       equipmentCard(primaryIcon, frame?.weapon || "Pulse cannon", "Primary"),
-      equipmentCard("missiles", "Lock-on missiles", "Secondary"),
+      equipmentCard("missiles", "Lock-on missiles", p.missiles + " / 4 ready"),
     );
     const upgrades = g.loadout;
     $("patrolEquipment").hidden = !upgrades.length;
@@ -915,6 +965,15 @@ const patrol = (() => {
       title = "Paused";
       kicker = detail = "";
       $("wave").textContent = g.wave > g.waveCount ? "Endless · Wave " + g.wave : "Wave " + g.wave + " / " + g.waveCount;
+      const track = $("waveTrack");
+      track.hidden = g.wave > g.waveCount;
+      track.replaceChildren(...(track.hidden ? [] : Array.from({length: g.waveCount}, (_, i) => {
+        const stop = document.createElement("span");
+        if (i + 1 === g.wave) stop.className = "current";
+        else if (i < g.completedWaves) stop.className = "complete";
+        return stop;
+      })));
+      $("missionScenery").replaceChildren(PatrolDeck.landscape(world.mapId, $("lightPick").value));
       $("missionTitle").textContent = g.missionTitle;
       $("objective").textContent = g.objective;
       $("bonus").textContent = g.bonus;

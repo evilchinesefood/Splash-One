@@ -209,5 +209,5 @@ window.PatrolDeck = (() => {
     document.getElementById("hangar").addEventListener("close",refresh);
     return {refresh};
   }
-  return {create,regions};
+  return {create,regions,landscape};
 })();

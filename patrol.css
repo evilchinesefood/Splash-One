@@ -441,48 +441,101 @@ body.cockpit #flightStatus {
   }
 }
 
-.pause-menu .panel {
-  width: min(720px, 100%);
-  height: min(540px, 100%);
-  max-height: 100%;
-  overflow: hidden;
-  display: grid;
-  grid-template: "title region" auto "tabs tabs" auto "details details" minmax(0, 1fr) "actions actions" auto / auto 1fr;
-  padding: clamp(12px, 2.4vw, 24px);
-  color: #fff1db;
-  background: #28242f;
-  border: 1px solid #ad9290;
-  border-top: 4px solid #ffb67f;
+#stage:has(.pause-menu:not([hidden])) :is(#flight, #toast) { visibility: hidden; }
+.pause-menu {
+  --pause-ink: #23242d;
+  --pause-rail: #292a33;
+  --pause-line: #52525d;
+  --pause-warm: #ffc38c;
+  background: #171722a6;
 }
-.pause-menu #pauseRegion { grid-area: region; justify-self: end; align-self: center; margin: 0; color: #dfcfc9; }
-.pause-menu #modalTitle { grid-area: title; margin: 0; }
+.pause-menu .panel {
+  width: min(100%, 944px);
+  height: min(100%, clamp(508px, 84dvh, 608px));
+  max-height: 100%;
+  display: grid;
+  grid-template: "title region" auto "tabs tabs" auto "details details" minmax(0, 1fr) "actions actions" auto / auto minmax(0,1fr);
+  overflow: hidden;
+  padding: 0;
+  color: #f9eed9;
+  background: var(--pause-ink);
+  border: 1px solid #82808a;
+  border-top: 3px solid var(--pause-warm);
+  border-radius: 4px;
+  box-shadow: 0 18px 64px #11111dc2, 0 2px 0 #17171f;
+}
+.pause-menu #modalTitle, .pause-menu #pauseRegion { border-bottom: 1px solid var(--pause-line); background: #2c2c35; }
+.pause-menu #modalTitle {
+  grid-area: title;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 18px;
+  margin: 0;
+  font: 720 clamp(22px, 3vw, 31px)/1 system-ui, sans-serif;
+  letter-spacing: -.045em;
+}
+.pause-menu #modalTitle::before {
+  content: "";
+  width: 10px;
+  height: 16px;
+  border-inline: 3px solid var(--pause-warm);
+  box-sizing: border-box;
+}
+.pause-menu #pauseRegion {
+  grid-area: region;
+  justify-content: flex-end;
+  gap: 8px;
+  margin: 0;
+  min-width: 0;
+  padding: 9px 18px 9px 2px;
+  color: #dfd9ce;
+  text-align: right;
+  font: 650 11px/1.35 ui-monospace, Menlo, monospace;
+  letter-spacing: .055em;
+}
+.pause-menu .crest { flex: none; width: 26px; height: auto; image-rendering: pixelated; }
 .pause-menu :is(#modalKicker, #modalText) { display: none; }
 #pauseTabs {
   grid-area: tabs;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  border-block-end: 1px solid #79676f;
-  margin-block: 16px 10px;
+  padding: 4px 6px 0;
+  border-bottom: 1px solid var(--pause-line);
+  background: var(--pause-rail);
 }
 #pauseTabs button {
+  position: relative;
   min-width: 0;
-  padding: 10px 2px;
+  min-height: 43px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 6px 2px;
   border: 0;
   border-bottom: 3px solid transparent;
-  border-radius: 0;
+  border-radius: 2px 2px 0 0;
   background: transparent;
-  color: #d3c6c6;
-  font: 650 clamp(12px, 1.75vw, 16px)/1.2 system-ui, sans-serif;
+  color: #c7c5c9;
+  font: 640 14px/1.12 system-ui, sans-serif;
+  -webkit-tap-highlight-color: transparent;
 }
-#pauseTabs button[aria-selected="true"] { background: #433741; border-bottom-color: var(--peach); color: #ffe1b5; }
-#pauseTabs button:hover { color: #fff1db; background: #39303b; }
-#pauseTabs button:focus-visible, .pause-card:focus-visible { outline: 2px solid #ffe0ad; outline-offset: -2px; }
+#pauseTabs canvas { width: 20px; height: 20px; image-rendering: pixelated; opacity: .75; }
+#pauseTabs button:hover { background: #383740; color: #fff1db; }
+#pauseTabs button[aria-selected="true"] {
+  background: #463a37; border-color: var(--pause-warm); color: #ffe2b9;
+}
+#pauseTabs button[aria-selected="true"] canvas { opacity: 1; }
+#pauseTabs button:focus-visible, .pause-card:focus-visible { outline: 2px solid #a6e3d6; outline-offset: -3px; }
 #pauseDetails {
   grid-area: details;
+  min-width: 0;
   min-height: 0;
   overflow: auto;
   overscroll-behavior: contain;
-  scrollbar-color: #8e7581 #28242f;
+  scrollbar-color: #767781 var(--pause-ink);
+  padding: clamp(10px, 1.5vw, 18px);
 }
 .pause-card {
   min-width: 0;
@@ -491,170 +544,87 @@ body.cockpit #flightStatus {
   background: #35303d;
 }
 #pauseDetails h3 { margin: 0; font-size: 17px; line-height: 1.25; }
-#wavePanel #wave { color: #ffd199; font: 700 13px/1.5 ui-monospace, Menlo, monospace; }
-#wavePanel #missionTitle { margin: 4px 0 13px; color: #fff0d9; font-size: clamp(20px, 3vw, 30px); }
-.wave-brief { margin: 0; }
-.wave-brief div { border-top: 1px solid #61545f; padding: 10px 0 4px; }
-.wave-brief div + div { margin-top: 8px; }
-.wave-brief dt { color: #d5b9ac; font: 700 12px/1.4 ui-monospace, Menlo, monospace; }
-.wave-brief dd { margin: 3px 0 0; font: 500 16px/1.45 system-ui, sans-serif; color: #fff0db; }
-@media (min-width: 650px) {
-  #controlsPanel { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); gap: 18px; }
-  #controlsPanel .steering-settings { padding-right: 16px; border-right: 1px solid #61545f; }
-  #controlsPanel .flight-preferences { border-bottom: 0; }
-}
-#settingsPanel { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; }
-#settingsPanel .flight-preferences { margin: 0; padding: 0; border: 0; }
-#settingsPanel .flight-preferences h3 { margin-bottom: 8px; }
-.pause-heading {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 12px;
-}
-#pilotLevel, .volume-row output {
-  color: #ffd195;
-  font: 700 13px/1.3 ui-monospace, Menlo, monospace;
-}
-#pauseDetails .equipment {
-  border-top: 2px solid #dba47f;
-  background: #302c38;
-}
-#pauseDetails .equipment h3 { font-size: 20px; }
-.equipment h4 {
-  margin: 16px 0 7px;
-  color: #e5d4d0;
-  font-size: 15px;
-}
-#pilotLevel {
-  padding: 3px 7px;
-  border: 1px solid #80604f;
-  background: #3d3032;
-  white-space: nowrap;
-}
-.loadout-grid {
-  --accent: #f3b88c;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 206px), 1fr));
-  gap: 6px 8px;
-  padding: 0;
-  margin: 0;
-  list-style: none;
-}
-#weapons { margin-top: 11px; }
-#loadout { --accent: #9cd6cf; }
-#installedParts { --accent: #ceb5ed; }
-.loadout-grid li {
-  display: grid;
-  grid-template-columns: 60px minmax(0, 1fr);
-  align-items: stretch;
-  min-height: 53px;
-  overflow: hidden;
-  border: 1px solid #625562;
-  border-left: 3px solid var(--accent);
-  background: #39333f;
-}
-.loadout-grid canvas {
-  align-self: center;
-  width: 60px;
-  height: auto;
-  image-rendering: pixelated;
-  background: #252431;
-}
-.loadout-grid li > div {
-  align-self: center;
-  padding: 5px 9px;
-}
-.loadout-grid small {
-  display: block;
-  color: var(--accent);
-  font: 700 11px/1.4 ui-monospace, Menlo, monospace;
-  letter-spacing: .055em;
-  text-transform: uppercase;
-}
-.loadout-grid strong {
-  display: block;
-  color: #fff2df;
-  font-size: 17px;
-  line-height: 1.2;
-}
-.volume-row {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  align-items: baseline;
-  gap: 2px 12px;
-  margin: 11px 0 4px;
-  font-size: 15px;
-}
-.volume-row input {
-  grid-column: 1 / -1;
-  width: 100%;
-  height: 26px;
-  margin: 0;
-  accent-color: #ffba85;
-  cursor: pointer;
-  touch-action: pan-y;
-}
-.volume-row input:focus-visible { outline: 2px solid #ffe9c4; outline-offset: 2px; }
-.flight-preferences { margin: 8px 0 12px; padding-bottom: 8px; border-bottom: 1px solid #675662; }
-.flight-preferences > label { display: flex; align-items: center; gap: 8px; min-height: 34px; font-size: 14px; cursor: pointer; }
-.flight-preferences input[type="checkbox"] { width: 17px; height: 17px; margin: 0; accent-color: var(--peach); }
-.camera-preference { justify-content: space-between; }
-.camera-preference select { color: var(--paper); background: #292430; border: 1px solid #8c7782; border-radius: 3px; padding: 5px; font: inherit; }
-.flight-preferences > .touch-preference, .touch-active .mouse-preference { display: none; }
-.touch-active .flight-preferences > .touch-preference { display: flex; }
 .touch-active.left-handed #stick { left: auto; right: var(--edge-right); }
 .touch-active.left-handed .pad { right: auto; left: var(--edge-left); direction: rtl; }
 .touch-active.left-handed .pad button { direction: ltr; }
-.capture-setting {
+.pause-menu #actions {
+  grid-area: actions;
   display: flex;
   align-items: center;
   gap: 8px;
-  margin: 12px 0;
-  font-size: 14px;
-  cursor: pointer;
-}
-.capture-setting input { width: 17px; height: 17px; accent-color: var(--peach); }
-.touch-active .flight-preferences > .capture-setting, .touch-guide { display: none; }
-.touch-active .touch-guide { display: grid; gap: 7px; padding: 0; margin: 9px 0; list-style: none; font-size: 15px; line-height: 1.4; }
-
-.pause-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; }
-.pause-tools button { min-height: 34px; color: #ffe4c6; background: #292430; }
-.pause-tools button[aria-pressed="false"]:is(#audio,#music) { color: #ddcfd2; border-style: dashed; }
-.pause-menu #actions {
-  grid-area: actions;
-  margin-top: 9px;
-  display: grid;
-  grid-template-columns: 2fr 1fr;
-  gap: 10px;
-  padding-top: 12px;
-  border-top: 1px solid #756270;
+  padding: 10px 14px;
+  background: var(--pause-rail);
+  border-top: 1px solid var(--pause-line);
 }
 .pause-menu #actions .action {
   min-width: 0;
-  min-height: 44px;
+  min-height: 41px;
+  display: flex;
+  align-items: center;
   justify-content: center;
-  text-align: center;
+  padding: 7px 12px;
+  border-radius: 3px;
+  font: 650 15px/1.2 system-ui, sans-serif;
+}
+.pause-menu #actions .primary {
+  flex: 2;
+  gap: 7px;
+  color: #292323;
+  background: #ffc38c;
+  border: 1px solid #ffe0b7;
+  box-shadow: inset 0 -3px #d69568;
+}
+.pause-menu #actions .primary::before {
+  content: "";
+  border-block: 5px solid transparent;
+  border-left: 7px solid currentColor;
+}
+.pause-menu #actions .action:not(.primary) {
+  flex: 1;
+  background: transparent;
+  color: #e5dadd;
+  border: 1px solid #68606a;
+}
+.pause-menu #actions .primary:hover { background: #ffd29e; }
+.pause-menu #actions .action:not(.primary):hover { background: #473439; color: #ffd2bf; }
+@media (min-width: 900px) and (min-height: 540px) {
+  .pause-menu .panel {
+    grid-template: "title region" auto "tabs details" minmax(0,1fr) "actions details" auto / 154px minmax(0,1fr);
+  }
+  #pauseTabs {
+    display: flex; flex-direction: column; gap: 3px;
+    border-bottom: 0; border-right: 1px solid var(--pause-line);
+    padding: 14px 8px;
+  }
+  #pauseTabs button {
+    justify-content: flex-start;
+    padding: 9px 10px;
+    border: 0; border-left: 3px solid transparent; border-radius: 2px;
+  }
+  #pauseTabs button[aria-selected="true"] { border-left-color: var(--pause-warm); }
+  .pause-menu #actions {
+    flex-direction: column; align-items: stretch; padding: 12px 10px;
+    border-top: 0; border-right: 1px solid var(--pause-line);
+  }
 }
 @media (max-width: 620px) and (orientation: portrait) {
-  #settingsPanel { grid-template-columns: 1fr; gap: 17px; }
-  .pause-menu #pauseRegion { max-width: 145px; font-size: 9px; }
-  #pauseTabs { margin-block: 10px 8px; }
-  .pause-card { padding: 12px 14px; }
+  .pause-menu #modalTitle { padding: 11px 10px; gap: 7px; }
+  .pause-menu #pauseRegion { font-size: 10px; padding-right: 10px; }
+  .pause-menu #pauseRegion .crest { width: 20px; }
+  .pause-card { padding: 12px; }
+}
+@media (max-width: 420px) {
+  #pauseTabs button { flex-direction: column; gap: 2px; min-height: 44px; font-size: 12px; }
+  #pauseTabs canvas { width: 16px; height: 16px; }
 }
 @media (max-height: 470px) {
-  .pause-menu .panel { padding: 8px 12px; }
-  .pause-menu #pauseRegion { margin: 0; gap: 6px; }
-  .pause-menu .crest { width: 20px; height: 16px; }
-  .pause-menu #modalTitle { font-size: 26px; }
-  #pauseTabs { margin-block: 4px 6px; }
-  #pauseTabs button { padding-block: 7px; }
-
-  .pause-card { padding: 10px; }
-  .pause-menu #actions { padding-top: 6px; }
+  .pause-menu #modalTitle { padding: 7px 12px; font-size: 21px; }
+  .pause-menu #pauseRegion { padding-block: 3px; font-size: 10px; }
+  #pauseTabs { padding-top: 0; }
+  #pauseTabs button { min-height: 40px; }
+  .pause-menu #actions { padding: 5px 9px; }
+  .pause-menu #actions .action { min-height: 36px; }
 }
-
-
 @media (orientation: portrait) and (max-height: 740px) {
   #home {
     top: 48%;
@@ -968,17 +938,3 @@ body.cockpit #flightStatus {
   .finish-sample { aspect-ratio: 3.05; }
   .finish-sample canvas { width: 76%; }
 }
-
-#bindingEditor > p { margin: 8px 0; font-size: 13px; line-height: 1.4; color: #e4d1c1; }
-.binding-grid {
-  display: grid; grid-template-columns: minmax(82px, 1fr) repeat(2, minmax(0, 0.85fr));
-  align-items: center; gap: 5px 7px; margin: 10px 0;
-}
-.binding-grid > span { font-size: 14px; }
-.binding-grid button, .binding-reset {
-  min-width: 0; min-height: 34px; padding: 5px 6px;
-  color: #ffebd2; background: #312b36; border: 1px solid #7a6774; font-size: 13px;
-}
-.binding-grid button[aria-pressed="true"] { color: #261d20; background: #ffc295; border-color: #ffdab9; }
-.binding-reset { padding-inline: 10px; }
-#bindingEditor .binding-status { min-height: 1.4em; color: #ffcd9e; }

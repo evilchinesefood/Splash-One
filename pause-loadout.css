@@ -1,0 +1,110 @@
+#pauseDetails :is(#equipmentPanel,#wavePanel) {
+  border: 0;
+  background: transparent;
+  padding: 0;
+}
+
+.pause-airframe {
+  display: grid;
+  grid-template-columns: minmax(110px, 1.1fr) minmax(116px, 1fr) minmax(100px, .9fr);
+  align-items: center;
+  border: 1px solid #535761;
+  background: #2b2e39;
+}
+#pausePortrait {
+  align-self: stretch;
+  display: grid;
+  place-items: center;
+  min-height: 112px;
+  overflow: hidden;
+  background-color: #232932;
+  background-image: linear-gradient(#8dc5c80e 1px, transparent 1px), linear-gradient(90deg,#8dc5c80e 1px, transparent 1px);
+  background-size: 16px 16px;
+  border-inline-end: 1px solid #47525a;
+}
+#pausePortrait canvas { width: 100%; max-width: 258px; height: auto; image-rendering: pixelated; }
+.airframe-identity { min-width: 0; padding: 10px clamp(8px, 1.3vw, 18px); }
+#airframeClass, .airframe-condition dt, #wavePanel .wave-brief dt {
+  display: block;
+  color: #a6d7cf;
+  font: 650 10px/1.4 ui-monospace, Menlo, monospace;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+#equipmentPanel #airframeName { margin: 2px 0 5px; color: #fff1dc; font-size: clamp(24px, 3vw, 35px); line-height: 1.1; }
+#equipmentPanel #pilotLevel { border: 0; padding: 0; background: none; color: #ffc995; font: 650 12px/1.4 ui-monospace, Menlo, monospace; }
+.airframe-condition { display: grid; gap: 10px; margin: 0; padding: 10px 14px 10px 0; }
+.airframe-condition > div { position: relative; }
+.airframe-condition dt { color: #d9d1ca; }
+.airframe-condition dd { margin: 0; }
+.airframe-condition dd span { position: absolute; right: 0; top: 0; color: #ebe9de; font: 600 10px/1.4 ui-monospace, Menlo, monospace; }
+.airframe-condition meter {
+  display: block; margin: 4px 0 0; width: 100%; height: 5px; background: #181e26; border: 0;
+  --fill: #91d7c9; accent-color: var(--fill);
+}
+.airframe-condition #pauseHullMeter { --fill: #f8b785; }
+.airframe-condition meter::-webkit-meter-bar { height: 5px; border: 0; border-radius: 0; background: #181e26; }
+.airframe-condition meter::-webkit-meter-optimum-value { background: var(--fill); }
+.airframe-condition meter::-moz-meter-bar { background: var(--fill); }
+
+#equipmentPanel h4 {
+  margin: 17px 0 8px; display: flex; align-items: center; gap: 9px;
+  color: #e5e2da; font-size: 14px; line-height: 1.25; font-weight: 650;
+}
+#equipmentPanel h4::after { content: ""; flex: 1; height: 1px; background: #4d4d58; }
+#equipmentPanel .loadout-grid {
+  --accent: #f7c391;
+  display: grid; margin: 0; padding: 0; list-style: none;
+  grid-template-columns: repeat(auto-fit,minmax(min(100%,180px),1fr));
+  gap: 6px;
+}
+#equipmentPanel #loadout { --accent: #9ddace; }
+#equipmentPanel #installedParts { --accent: #c8bfdf; }
+#equipmentPanel #weapons { margin: 0; }
+#equipmentPanel .loadout-grid li { display: grid; grid-template-columns: 46px minmax(0,1fr); min-height: 48px; border: 1px solid #53545f; background: #30313b; }
+#equipmentPanel .loadout-grid canvas { align-self: center; height: auto; image-rendering: pixelated; width: 100%; max-width: 46px; background: transparent; }
+#equipmentPanel .loadout-grid li > div { align-self: center; padding: 5px 7px 6px 0; }
+#equipmentPanel .loadout-grid strong { display: block; color: #f4ede1; font-size: 15px; line-height: 1.2; }
+#equipmentPanel .loadout-grid small { display: block; margin-bottom: 3px; font: 650 10px/1.15 ui-monospace, Menlo, monospace; letter-spacing: .04em; color: var(--accent); }
+
+.mission-banner {
+  display: grid;
+  grid-template-columns: minmax(0,1.45fr) minmax(100px,1fr);
+  align-items: stretch;
+  overflow: hidden;
+  border: 1px solid #545862;
+  background: #2c303a;
+}
+.mission-ident { align-self: center; padding: 16px; }
+#wavePanel #wave { color: #ffc995; font: 700 11px/1.4 ui-monospace, Menlo, monospace; text-transform: uppercase; letter-spacing: .08em; }
+#wavePanel #missionTitle { color: #fff1de; font-size: clamp(22px, 3vw, 34px); line-height: 1.08; margin: 7px 0 0; overflow-wrap: break-word; }
+#missionScenery { position: relative; overflow: hidden; min-height: 106px; border-inline-start: 1px solid #52535a; }
+#missionScenery canvas { position: absolute; inset: 0; display: block; width: 100%; height: 100%; object-fit: cover; image-rendering: pixelated; }
+#waveTrack { display: flex; gap: 3px; margin-top: 5px; }
+#waveTrack span { flex: 1; height: 4px; background: #41454f; }
+#waveTrack .current { background: #ffc38c; }
+#waveTrack .complete { background: #82bdb4; }
+#wavePanel .wave-brief { display: grid; gap: 10px; margin: 18px 0 0; }
+#wavePanel .wave-brief > div { padding: 12px 14px; margin: 0; border: 1px solid #53555d; border-left: 3px solid #91d7c9; background: #2e303b; }
+#wavePanel .wave-brief dt { color: #ade0d6; }
+#wavePanel .wave-brief dd { margin: 4px 0 0; color: #f5ebdd; font-size: clamp(15px, 1.7vw, 18px); line-height: 1.35; }
+#wavePanel #bonusObjective { border-left-color: #efba88; }
+#wavePanel #bonusObjective dt { color: #f1c89f; }
+
+@media (max-width: 680px) {
+  .pause-airframe { grid-template-columns: minmax(90px, 1fr) minmax(105px, 1fr); }
+  #pausePortrait { min-height: 83px; }
+  .airframe-condition { grid-column: 1/-1; grid-template-columns: 1fr 1fr; gap: 16px; padding: 9px 12px; border-top: 1px solid #474d56; }
+  .airframe-identity { padding: 10px 12px; }
+  #equipmentPanel .loadout-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  #equipmentPanel .loadout-grid li { grid-template-columns: 37px minmax(0,1fr); }
+  #equipmentPanel .loadout-grid strong { font-size: 14px; }
+  .mission-ident { padding: 12px; }
+  #missionScenery { min-height: 90px; }
+}
+@media (max-width: 400px) {
+  #equipmentPanel .loadout-grid { grid-template-columns: 1fr; }
+  #equipmentPanel .loadout-grid li { grid-template-columns: 40px minmax(0,1fr); min-height: 40px; }
+  #equipmentPanel .loadout-grid li > div { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 2px 6px; padding: 5px 8px 5px 0; }
+  #equipmentPanel .loadout-grid small { order: 2; margin: 0; }
+}

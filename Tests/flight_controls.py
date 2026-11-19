@@ -63,7 +63,17 @@ def desktop(browser, url):
     pause()
     expect(page.get_by_role("tab")).to_have_text(["Equipment", "Wave", "Controls", "Settings"])
     equipment = tab(page, "Equipment")
-    equipment.focus()
+    expect(equipment).to_be_focused()
+    expect(page.get_by_role("tablist")).to_have_attribute("aria-orientation", "vertical")
+    end = page.get_by_role("button", name="End", exact=True)
+    page.keyboard.press("Shift+Tab")
+    expect(end).to_be_focused()
+    page.keyboard.press("Tab")
+    expect(equipment).to_be_focused()
+    page.keyboard.press("ArrowUp")
+    expect_tab(page, "Settings")
+    page.keyboard.press("ArrowDown")
+    expect(equipment).to_be_focused()
     equipment.press("ArrowRight")
     wave = expect_tab(page, "Wave")
     expect(tab(page, "Wave")).to_be_focused()
@@ -84,7 +94,9 @@ def desktop(browser, url):
     slider.focus()
     slider.press("Home")
     expect(page.locator("#sensitivityValue")).to_have_text("50%")
-    resume()
+    page.get_by_role("button", name="Resume", exact=True).focus()
+    page.keyboard.press("Enter")
+    expect(page.locator("#pause")).to_be_focused()
     page.evaluate("""() => {
       const g = patrol.game, step = g.step;
       g.step = (dt, input) => {
@@ -150,6 +162,7 @@ def touch(browser, url):
         flight_hud(page)
         page.locator("#pause").tap()
         expect_tab(page, "Equipment")
+        expect(page.get_by_role("tablist")).to_have_attribute("aria-orientation", "horizontal")
         for name in ["Wave", "Controls", "Settings"]:
             tab(page, name).tap()
             expect_tab(page, name)

@@ -10,6 +10,8 @@
     <link rel="stylesheet" href="patrol.css" />
     <link rel="stylesheet" href="upgrades.css" />
     <link rel="stylesheet" href="deck.css" />
+    <link rel="stylesheet" href="pause-loadout.css" />
+    <link rel="stylesheet" href="pause-preferences.css" />
     <script defer src="world.js"></script>
     <script defer src="game.js"></script>
     <script defer src="art.js"></script>
@@ -88,10 +90,19 @@
           </div>
           <div id="pauseDetails" hidden>
             <section class="pause-card equipment" role="tabpanel" id="equipmentPanel" aria-labelledby="tabEquipment" tabindex="0">
-              <div class="pause-heading">
-                <h3>Aircraft loadout</h3>
-                <span id="pilotLevel"></span>
+              <div class="pause-airframe">
+                <div id="pausePortrait" aria-hidden="true"></div>
+                <div class="airframe-identity">
+                  <span id="airframeClass"></span>
+                  <h3 id="airframeName"></h3>
+                  <span id="pilotLevel"></span>
+                </div>
+                <dl class="airframe-condition">
+                  <div><dt>Shield</dt><dd><span id="pauseShield"></span><meter id="pauseShieldMeter" aria-label="Shield"></meter></dd></div>
+                  <div><dt>Hull</dt><dd><span id="pauseHull"></span><meter id="pauseHullMeter" aria-label="Hull"></meter></dd></div>
+                </dl>
               </div>
+              <h4>Weapons</h4>
               <ul id="weapons" class="loadout-grid" aria-label="Weapons"></ul>
               <div id="patrolEquipment" hidden>
                 <h4>Patrol upgrades</h4>
@@ -103,15 +114,18 @@
               </div>
             </section>
             <section class="pause-card" role="tabpanel" id="wavePanel" aria-labelledby="tabWave" tabindex="0" hidden>
-              <span id="wave"></span>
-              <h3 id="missionTitle"></h3>
+              <div class="mission-banner">
+                <div class="mission-ident"><span id="wave"></span><h3 id="missionTitle"></h3></div>
+                <div id="missionScenery" aria-hidden="true"></div>
+              </div>
+              <div id="waveTrack" aria-hidden="true"></div>
               <dl class="wave-brief">
                 <div><dt>Objective</dt><dd id="objective"></dd></div>
                 <div id="bonusObjective"><dt>Bonus objective</dt><dd id="bonus"></dd></div>
               </dl>
             </section>
             <section class="pause-card" role="tabpanel" id="controlsPanel" aria-labelledby="tabControls" tabindex="0" hidden>
-              <div class="steering-settings">
+              <div class="steering-settings preference-card">
                 <h3>Steering</h3>
                 <div class="flight-preferences">
                   <div class="volume-row mouse-preference">
@@ -125,21 +139,21 @@
                   <label class="touch-preference"><input type="checkbox" id="leftHanded" /> Left-handed touch controls</label>
                 </div>
                 <ul class="touch-guide">
-                  <li><b>Steer</b> with the <span id="stickSide">left</span> stick.</li>
-                  <li><b>Hold <span id="touchPrimaryHint">Cannon</span>.</b> Slide onto Missile to fire both.</li>
-                  <li><b>Hold</b> Boost or Brake. <b>Tap</b> Roll to evade.</li>
-                  <li>Change your current camera in <b>Settings</b>.</li>
+                  <li><b>Steer</b><span>Drag the <span id="stickSide">left</span> stick.</span></li>
+                  <li><b>Fire</b><span>Hold <span id="touchPrimaryHint">Cannon</span>. Slide onto Missile to fire both.</span></li>
+                  <li><b>Maneuver</b><span>Hold Boost or Brake. Tap Roll to evade.</span></li>
+                  <li><b>Camera</b><span>Choose a view in Settings.</span></li>
                 </ul>
               </div>
-              <div id="bindingEditor"></div>
+              <div id="bindingEditor" class="preference-card"></div>
             </section>
             <section class="pause-card" role="tabpanel" id="settingsPanel" aria-labelledby="tabSettings" tabindex="0" hidden>
-              <div class="flight-preferences">
-                <h3>Flight display</h3>
+              <div class="flight-preferences preference-card">
+                <h3>Camera &amp; HUD</h3>
                 <label class="camera-preference" for="currentView">Current camera
                   <select id="currentView"><option value="chase">Chase cam</option><option value="cockpit">Cockpit</option><option value="north">North-up</option></select>
                 </label>
-                <label class="camera-preference" for="startingView">Starting camera
+                <label class="camera-preference" for="startingView">Camera at launch
                   <select id="startingView"><option value="chase">Chase cam</option><option value="cockpit">Cockpit</option><option value="north">North-up</option></select>
                 </label>
                 <label><input type="checkbox" id="showLead" checked /> Show gun lead indicator</label>
@@ -147,19 +161,19 @@
                   <button id="fullscreen" hidden title="Enter fullscreen" aria-label="Enter fullscreen" aria-pressed="false">⛶ Fullscreen</button>
                 </div>
               </div>
-              <div class="mix">
-                <h3>Audio</h3>
+              <div class="mix preference-card">
+                <h3>Audio mixer</h3>
+                <div class="audio-switches">
+                  <button type="button" id="audio" aria-label="Game audio" aria-pressed="true"><span>Game audio</span><b id="audioState" aria-hidden="true">On</b></button>
+                  <button type="button" id="music" aria-label="Soundtrack" aria-pressed="true"><span>Soundtrack</span><b id="musicState" aria-hidden="true">On</b></button>
+                </div>
                 <div class="volume-row">
-                  <label for="musicVolume">Music</label><output id="musicPercent" for="musicVolume">100%</output>
+                  <label for="musicVolume">Music volume</label><output id="musicPercent" for="musicVolume">100%</output>
                   <input id="musicVolume" type="range" min="0" max="100" value="100" />
                 </div>
                 <div class="volume-row">
                   <label for="effectsVolume">Sound effects</label><output id="effectsPercent" for="effectsVolume">100%</output>
                   <input id="effectsVolume" type="range" min="0" max="100" value="100" />
-                </div>
-                <div class="pause-tools">
-                  <button id="audio" title="Toggle all game audio" aria-pressed="true"><span id="audioIcon">♪</span> Sound on</button>
-                  <button id="music" title="Toggle the flight soundtrack" aria-pressed="true">Music on</button>
                 </div>
               </div>
             </section>
