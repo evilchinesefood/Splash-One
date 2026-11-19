@@ -5,12 +5,12 @@ const { join } = require("node:path");
 const vm = require("node:vm");
 
 const scope = { window: {} };
-vm.runInNewContext(readFileSync(join(__dirname, "..", "game.js"), "utf8"), scope);
+vm.runInNewContext(readFileSync(join(__dirname, "..", "src", "game", "game.js"), "utf8"), scope);
 const step = 1 / 60;
 
 function launch(id = "kestrel") {
   const sounds = [];
-  const game = scope.window.PatrolGame.create({ height: () => 0 }, (event, value) => {
+  const game = scope.window.SplashOneGame.create({ height: () => 0 }, (event, value) => {
     if (event === "sound") sounds.push(value);
   });
   game.start(10, {}, id);

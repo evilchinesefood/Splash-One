@@ -111,7 +111,7 @@ h1 {
   margin: 0;
 }
 #wordmark {
-  width: min(100%, 420px);
+  width: min(100%, 440px);
   height: auto;
   image-rendering: pixelated;
   display: block;
@@ -406,7 +406,7 @@ body.touch-active {
     top: 50%;
   }
   #wordmark {
-    width: 225px;
+    width: min(100%, 274px);
   }
   .lede {
     margin: 5px 0 10px;
@@ -681,7 +681,13 @@ body.cockpit #flightStatus {
     overflow-y: auto;
     overscroll-behavior: contain;
   }
-  .touch-active #wordmark { width: 178px; }
+  .touch-active #wordmark { width: min(100%, 220px); }
+  .touch-active #home .deck-picks { margin-bottom: 10px; }
+  .touch-active #home .deck-picks .deck-art { height: 43px; aspect-ratio: auto; }
+  .touch-active #home .deck-picks .deck-art canvas { object-fit: cover; }
+  .touch-active #home .deck-picks .aircraft-art canvas { object-fit: contain; }
+  .touch-active #home .deck-pick-copy { padding: 5px 8px; gap: 2px; }
+  .touch-active #home .deck-pick-copy strong { font-size: 13px; }
   .touch-active .lede { font-size: 12px; line-height: 1.25; margin-block: 3px 6px; }
 }
 

@@ -1,6 +1,6 @@
-# Patrol
+# Splash One
 
-[Play Patrol](https://dev.jdayers.com/patrol/)
+[Play Splash One](https://dev.jdayers.com/splash-one/)
 
 Open `index.html` in a WebGL2 browser. The game runs directly from disk, including its terrain worker. No install, build step, assets, fonts, or network connection are required. A static web server can serve the same folder.
 
@@ -35,6 +35,8 @@ On a phone, put your left thumb on the stick and drag from where it lands. Small
 Open the Region and Sky cards on the flight deck to choose a landscape and weather. Autumn Lake District has wooded islands and mountain lakes. Painted Mesa follows a turquoise river through terraced sandstone cliffs. Jade Isle has one forested volcanic island ringed by beaches and open ocean. Shore missions bring you back to the island if you have flown far out to sea. Moonlight keeps each map’s terrain and adds stars, a crescent moon, cool reflections, and aircraft navigation lights. Storm brings low dark clouds, windblown rain, and a steel-blue cast to every region. To choose another region during a run, pause, select **End**, then return to the flight deck.
 
 ## Patrols
+
+Choose difficulty **1**, **2**, or **3** on the flight deck. Level 1 uses the original formations. Levels 2 and 3 add two and four aircraft per formation, including air cover for boats, stations, and the carrier. The opening fighter objective requires three, four, or five kills respectively. Your browser remembers the selected level, and **Pause → Wave** shows it during a run.
 
 Destroy two targets in the opening fighter formations for your first upgrade. The third completes the wave and awards another choice. Other missions offer a choice halfway through their objective and again on completion. The shortest route has five missions and a carrier finale. Patrol length is a pacing estimate. Longer routes add more missions before the carrier. The tracker leads you toward the current objective. Keep a contact near the nose to acquire a missile lock. A hollow gun lead indicator shows where to point the nose for a moving contact within gun range. You can turn it off in **Pause → Settings**. The primary weapon and missile rails work independently. Incoming fire flashes the screen edge toward the source. When the shield breaks, it makes a distinct cracking sound. Pause to see the aircraft’s weapons, run upgrades and installed hangar parts.
 
@@ -74,14 +76,16 @@ Purchases apply on the next launch and persist in this browser. Existing players
 
 ## Where to extend it
 
-- `game.js` owns simulation and run state. The `encounters`, `gear`, and `models` tables hold mission groups, upgrade levels, and enemy stats. Add behavior alongside the corresponding flight, weapon, or enemy update.
-- `world.js` generates terrain and clouds in a worker. Its WebGL2 renderer and CPU height queries share the terrain map.
-- `art.js` draws projected aircraft, weapon effects, targeting cues, and cockpit instruments from simulation state.
-- `upgrades.js` and `upgrades.css` draw equipment icons and the between-wave upgrade cards.
-- `hangar.js` stores the credit balance and permanent parts, prices purchases, and calculates run payouts.
-- `audio.js` synthesizes the flight score, engine, and combat sounds using Web Audio.
-- `main.js` connects controls, cameras, audio, and the fixed-step game loop. The menus and flight readouts live in `index.html` and `patrol.css`.
+- `src/game/game.js` owns simulation and run state. The `encounters`, `gear`, and `models` tables hold mission groups, upgrade levels, and enemy stats. Add behavior alongside the corresponding flight, weapon, or enemy update.
+- `src/game/world.js` generates terrain and clouds in a worker. Its WebGL2 renderer and CPU height queries share the terrain map.
+- `src/game/art.js` draws projected aircraft, weapon effects, targeting cues, and cockpit instruments from simulation state.
+- `src/ui/upgrades.js` and `styles/upgrades.css` draw equipment icons and the between-wave upgrade cards.
+- `src/ui/hangar.js` stores the credit balance and permanent parts, prices purchases, and calculates run payouts.
+- `src/game/audio.js` synthesizes the flight score, engine, and combat sounds using Web Audio.
+- `src/main.js` connects controls, cameras, audio, and the fixed-step game loop. The menus and flight readouts live in `index.html` and `styles/game.css`.
+
+Game code lives in `src/game/`, menus and persistent preferences in `src/ui/`, styles in `styles/`, and site icons in `assets/icons/`. Run `node --test tests/*.cjs` from the repository root to check the simulation and career systems. The browser continues to use the original save keys so existing flight credits, unlocks, finishes, and settings carry over on the dev site.
 
 ## Deployment
 
-Run `Scripts/Deploy.sh` to preview changes to the hosted game. Run `Scripts/Deploy.sh --live` to upload the game assets and icons, followed by the entry page. The Dev Labs launcher card is maintained in the separate Home-Website repository.
+Run `scripts/deploy.sh` to preview changes to the hosted game. Run `scripts/deploy.sh --live` to publish the runtime directories and entry page at `/splash-one/`, then install the permanent `/patrol/` redirect. The Dev Labs launcher card is maintained in the separate Home-Website repository.

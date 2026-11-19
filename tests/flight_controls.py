@@ -77,9 +77,9 @@ def desktop(browser, url):
     equipment.press("ArrowRight")
     wave = expect_tab(page, "Wave")
     expect(tab(page, "Wave")).to_be_focused()
-    expect(wave.locator("#missionTitle")).to_have_text(page.evaluate("patrol.game.missionTitle"))
-    expect(wave.locator("#objective")).to_have_text(page.evaluate("patrol.game.objective"))
-    expect(wave.locator("#bonus")).to_contain_text(page.evaluate("patrol.game.bonus"))
+    expect(wave.locator("#missionTitle")).to_have_text(page.evaluate("splashOne.game.missionTitle"))
+    expect(wave.locator("#objective")).to_have_text(page.evaluate("splashOne.game.objective"))
+    expect(wave.locator("#bonus")).to_contain_text(page.evaluate("splashOne.game.bonus"))
     expect(wave.locator("#wave")).to_contain_text("1")
     tab(page, "Wave").press("End")
     expect_tab(page, "Settings")
@@ -98,16 +98,16 @@ def desktop(browser, url):
     page.keyboard.press("Enter")
     expect(page.locator("#pause")).to_be_focused()
     page.evaluate("""() => {
-      const g = patrol.game, step = g.step;
+      const g = splashOne.game, step = g.step;
       g.step = (dt, input) => {
         if (input?.moved) window.lastSteer = {x: input.x, y: input.y};
         step(dt, input);
       };
     }""")
     page.mouse.move(660, 350)
-    until(lambda: page.evaluate("window.lastSteer?.x > 0 && patrol.game.player.pitch > 0.02"))
+    until(lambda: page.evaluate("window.lastSteer?.x > 0 && splashOne.game.player.pitch > 0.02"))
     low = page.evaluate("window.lastSteer.x")
-    assert not page.evaluate("patrol.game.showGunLead")
+    assert not page.evaluate("splashOne.game.showGunLead")
     pause()
     tab(page, "Controls").click()
     slider.focus()
@@ -115,7 +115,7 @@ def desktop(browser, url):
     page.locator("#invertPitch").check()
     resume()
     page.mouse.move(660, 350)
-    until(lambda: page.evaluate("patrol.game.player.pitch < -0.025"))
+    until(lambda: page.evaluate("splashOne.game.player.pitch < -0.025"))
     assert page.evaluate("window.lastSteer.x") > low * 2
 
     pause()
@@ -127,7 +127,7 @@ def desktop(browser, url):
     until(lambda: page.evaluate("Math.abs(window.lastSteer.x - 0.1) < 0.001"))
     page.reload()
     page.locator("#launch:enabled").click()
-    assert page.evaluate("patrol.game.view === 1 && !patrol.game.showGunLead")
+    assert page.evaluate("splashOne.game.view === 1 && !splashOne.game.showGunLead")
     flight_hud(page, cockpit=True)
     pause()
     tab(page, "Settings").click()
@@ -141,11 +141,11 @@ def desktop(browser, url):
     page.locator("#captureMouse").uncheck()
     page.get_by_role("button", name="End", exact=True).click()
     page.get_by_role("button", name="Fly again", exact=True).click()
-    assert page.evaluate("patrol.game.view === 2")
+    assert page.evaluate("splashOne.game.view === 2")
     flight_hud(page)
     page.mouse.move(600, 70)
-    until(lambda: page.evaluate("patrol.game.elapsed > .4"))
-    assert abs(page.evaluate("patrol.game.player.yaw")) < 0.15
+    until(lambda: page.evaluate("splashOne.game.elapsed > .4"))
+    assert abs(page.evaluate("splashOne.game.player.yaw")) < 0.15
     assert not errors, errors
     page.close()
 
@@ -169,7 +169,7 @@ def touch(browser, url):
             assert page.locator("#modal .panel").evaluate("el => el.scrollWidth <= el.clientWidth + 1")
         page.locator("#currentView").select_option("cockpit")
         page.get_by_role("button", name="Resume", exact=True).tap()
-        assert page.evaluate("patrol.game.view === 1")
+        assert page.evaluate("splashOne.game.view === 1")
         flight_hud(page, cockpit=True)
         page.locator("#pause").tap()
         expect_tab(page, "Equipment")
@@ -181,15 +181,15 @@ def touch(browser, url):
         page.locator("#startingView").select_option("cockpit")
         page.locator("#currentView").select_option("north")
         page.get_by_role("button", name="Resume", exact=True).tap()
-        assert page.evaluate("patrol.game.view === 2")
+        assert page.evaluate("splashOne.game.view === 2")
         flight_hud(page)
         page.reload()
         page.locator("#launch:enabled").tap()
-        assert page.evaluate("patrol.game.view === 1")
+        assert page.evaluate("splashOne.game.view === 1")
         stick_box, pad_box = stick.bounding_box(), pad.bounding_box()
         assert stick_box["x"] > pad_box["x"] + pad_box["width"]
         if width > height:
-            until(lambda: page.evaluate("patrol.camera.cockpitSpace?.length === 2"))
+            until(lambda: page.evaluate("splashOne.camera.cockpitSpace?.length === 2"))
         def center(box):
             return {"x": box["x"] + box["width"] / 2, "y": box["y"] + box["height"] / 2}
         thumb = {**center(stick_box), "id": 1}
@@ -199,7 +199,7 @@ def touch(browser, url):
             cdp.send("Input.dispatchTouchEvent", {"type": kind, "touchPoints": points})
         fingers("touchStart", [thumb, trigger])
         fingers("touchMove", [{**thumb, "x": thumb["x"] + 25}, trigger])
-        until(lambda: page.evaluate("patrol.game.player.yaw > 0.04 && patrol.game.shots.some(s => s.kind === 'cannon')"))
+        until(lambda: page.evaluate("splashOne.game.player.yaw > 0.04 && splashOne.game.shots.some(s => s.kind === 'cannon')"))
         fingers("touchEnd", [])
         assert not errors, errors
         page.close()

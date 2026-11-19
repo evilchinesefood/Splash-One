@@ -1,5 +1,5 @@
 "use strict";
-const patrol = (() => {
+const splashOne = (() => {
   const $ = (id) => document.getElementById(id);
   const canvas = $("world"),
     overlay = $("art"),
@@ -16,31 +16,39 @@ const patrol = (() => {
   };
   const durations = document.querySelectorAll("[data-duration]");
   const glyphs = {
+    S: ["011111", "110000", "110000", "011110", "000011", "000011", "111110"],
     P: ["111110", "110011", "110011", "111110", "110000", "110000", "110000"],
-    A: ["011110", "110011", "110011", "111111", "110011", "110011", "110011"],
-    T: ["111111", "001100", "001100", "001100", "001100", "001100", "001100"],
-    R: ["111110", "110011", "110011", "111110", "111100", "110110", "110011"],
-    O: ["011110", "110011", "110011", "110011", "110011", "110011", "011110"],
     L: ["110000", "110000", "110000", "110000", "110000", "110000", "111111"],
+    A: ["011110", "110011", "110011", "111111", "110011", "110011", "110011"],
+    H: ["110011", "110011", "110011", "111111", "110011", "110011", "110011"],
+    O: ["011110", "110011", "110011", "110011", "110011", "110011", "011110"],
+    N: ["110011", "111011", "111011", "111111", "110111", "110111", "110011"],
+    E: ["111111", "110000", "110000", "111110", "110000", "110000", "111111"],
   };
   function drawMark() {
-    const mark = $("wordmark"),
-      c = mark.getContext("2d");
-    mark.width = 175;
-    mark.height = 33;
-    [..."PATROL"].forEach((letter, i) =>
-      glyphs[letter].forEach((line, y) =>
-        [...line].forEach((bit, x) => {
-          if (bit === "0") return;
-          const px = i * 28 + x * 4 + Math.floor((6 - y) * 0.6),
-            py = y * 4;
-          c.fillStyle = "#8e4f50";
-          c.fillRect(px, py + 4, 4, 4);
-          c.fillStyle = y < 4 ? "#fff0c9" : "#ffd592";
-          c.fillRect(px, py, 4, 4);
-        }),
-      ),
-    );
+    const mark = $("wordmark"), c = mark.getContext("2d");
+    const words = [
+      { text: "SPLASH", light: "#fff0c9", shade: "#ffd592", edge: "#8e4f50" },
+      { text: "ONE", light: "#c1fff0", shade: "#83d8cd", edge: "#385966" },
+    ];
+    let start = 0;
+    for (const word of words) {
+      for (const letter of word.text) {
+        glyphs[letter].forEach((line, y) => {
+          const slant = Math.floor((6 - y) * 0.7);
+          for (let x = 0; x < line.length; x++) {
+            if (line[x] === "0") continue;
+            const px = start + x * 4 + slant;
+            c.fillStyle = word.edge;
+            c.fillRect(px, y * 4 + 4, 4, 4);
+            c.fillStyle = y < 4 ? word.light : word.shade;
+            c.fillRect(px, y * 4, 4, 4);
+          }
+        });
+        start += 28;
+      }
+      start += 12;
+    }
     const badge = document.querySelector(".crest").getContext("2d");
     const mountains = [
       "000000000000000",
@@ -81,7 +89,7 @@ const patrol = (() => {
   const contacts = new Map();
   const desktopHeld = new Map();
   const heldActions = ["fire", "brake", "boost"];
-  const bindings = PatrolBindings.create($("bindingEditor"));
+  const bindings = SplashOneBindings.create($("bindingEditor"));
   let firePressed = false;
   const stick = $("stick");
   let stickId = null, touchMode = coarse.matches;
@@ -215,40 +223,40 @@ const patrol = (() => {
     toastTimer = 2.8;
   }
   function syncSoundButton() {
-    const enabled = PatrolAudio.enabled;
+    const enabled = SplashOneAudio.enabled;
     $("audioState").textContent = enabled ? "On" : "Off";
     $("audio").setAttribute("aria-pressed", String(enabled));
-    $("musicState").textContent = PatrolAudio.musicEnabled ? "On" : "Off";
-    $("music").setAttribute("aria-pressed", String(PatrolAudio.musicEnabled));
+    $("musicState").textContent = SplashOneAudio.musicEnabled ? "On" : "Off";
+    $("music").setAttribute("aria-pressed", String(SplashOneAudio.musicEnabled));
   }
   $("music").onclick = () => {
-    PatrolAudio.toggleMusic();
+    SplashOneAudio.toggleMusic();
     syncSoundButton();
   };
   for (const name of ["music", "effects"]) {
     const slider = $(name + "Volume");
     const value = $(name + "Percent");
-    slider.value = PatrolAudio.volume(name);
+    slider.value = SplashOneAudio.volume(name);
     function showLevel() {
       value.textContent = slider.value + "%";
       slider.setAttribute("aria-valuetext", value.textContent);
       slider.style.setProperty("--level", value.textContent);
     }
     slider.oninput = () => {
-      PatrolAudio.setVolume(name, slider.valueAsNumber);
+      SplashOneAudio.setVolume(name, slider.valueAsNumber);
       showLevel();
     };
-    slider.onchange = () => PatrolAudio.previewVolume(name);
+    slider.onchange = () => SplashOneAudio.previewVolume(name);
     showLevel();
   }
   async function unlockSound() {
-    if (PatrolAudio.enabled && !(await PatrolAudio.start()))
+    if (SplashOneAudio.enabled && !(await SplashOneAudio.start()))
       toast("Audio unavailable. Use the sound button to retry.");
     syncSoundButton();
   }
   $("audio").onclick = async () => {
-    const enabling = !PatrolAudio.enabled;
-    const enabled = await PatrolAudio.toggle();
+    const enabling = !SplashOneAudio.enabled;
+    const enabled = await SplashOneAudio.toggle();
     syncSoundButton();
     if (enabling && !enabled) toast("Audio unavailable. Use the sound button to retry.");
   };
@@ -274,7 +282,7 @@ const patrol = (() => {
   });
   function notify(type, detail) {
     if (type === "message") toast(detail);
-    if (type === "sound") PatrolAudio.play(detail);
+    if (type === "sound") SplashOneAudio.play(detail);
   }
   const actionPad = document.querySelector("#touch .pad");
   let cockpitSpace = null;
@@ -423,17 +431,17 @@ const patrol = (() => {
     manta: { title: "Heavy attack wing", accent: "#ffb382" },
     fleet: { title: "All aircraft", accent: "#d1b8f0" },
   };
-  function refreshWallet(profile = PatrolHangar.read()) {
+  function refreshWallet(profile = SplashOneHangar.read()) {
     $("deckCredits").textContent = profile.credits + " cr";
     $("wallet").textContent = profile.credits.toLocaleString("en-US");
   }
   function hangarHint() {
-    return PatrolHangar.sessionOnly ? "Progress is saved for this visit." : "Upgrades take effect on your next patrol.";
+    return SplashOneHangar.sessionOnly ? "Progress is saved for this visit." : "Upgrades take effect on your next patrol.";
   }
   function renderFinishes(profile, scope) {
     const look = profile.looks[scope];
     const sections = [];
-    for (const [kind, options] of Object.entries(PatrolHangar.cosmetics)) {
+    for (const [kind, options] of Object.entries(SplashOneHangar.cosmetics)) {
       const group = document.createElement("fieldset");
       const legend = document.createElement("legend");
       legend.textContent = kind === "paint" ? "Airframe paint" : "Engine flame";
@@ -451,7 +459,7 @@ const patrol = (() => {
         sample.className = "finish-sample " + kind;
         sample.setAttribute("aria-hidden", "true");
         if (kind === "paint") {
-          sample.append(PatrolArt.aircraftPortrait(scope, { ...look, paint: item.id }));
+          sample.append(SplashOneArt.aircraftPortrait(scope, { ...look, paint: item.id }));
         } else {
           sample.append(document.createElement("i"));
         }
@@ -470,7 +478,7 @@ const patrol = (() => {
     action.hidden = !previewFinish || look[previewFinish.kind] === previewFinish.id;
     if (action.hidden) return;
     const { kind, id } = previewFinish;
-    const item = PatrolHangar.cosmetics[kind].find(option => option.id === id);
+    const item = SplashOneHangar.cosmetics[kind].find(option => option.id === id);
     const owned = look.owned[kind].includes(id);
     action.textContent = owned ? "Equip" : "Buy & equip · " + item.price + " cr";
     action.setAttribute("aria-label", owned ? "Equip " + item.name : "Buy and equip " + item.name + " for " + item.price + " credits");
@@ -479,9 +487,9 @@ const patrol = (() => {
   function renderParts() {
     const scope = workshopScope;
     const fleet = scope === "fleet";
-    const frame = PatrolGame.airframes[scope];
-    const catalog = fleet ? PatrolHangar.fleetParts : PatrolHangar.partsFor(scope);
-    const profile = PatrolHangar.read();
+    const frame = SplashOneGame.airframes[scope];
+    const catalog = fleet ? SplashOneHangar.fleetParts : SplashOneHangar.partsFor(scope);
+    const profile = SplashOneHangar.read();
     const ranks = fleet ? profile.fleet : profile.ships[scope];
     refreshWallet(profile);
     const appearance = !fleet && workshopMode === "appearance";
@@ -499,7 +507,7 @@ const patrol = (() => {
     $("workshopName").textContent = fleet ? "Fleet upgrades" : frame.name;
     $("workshopWeapon").textContent = fleet ? "Charges refresh each patrol." : frame.weapon;
     const stats = $("workshopStats");
-    const tuned = fleet ? null : PatrolGame.tunedFrame(scope, ranks);
+    const tuned = fleet ? null : SplashOneGame.tunedFrame(scope, ranks);
     const readings = fleet ? [["Re-rolls", ranks.reroll], ["Banishes", ranks.banish], ["Extra lives", ranks.respawn]]
       : [["Cruise", Math.round(tuned.cruise * 1.94384) + " kt"], ["Turn", Math.round(tuned.handling * 1.5 * 180 / Math.PI) + "°/s"],
          ["Hull", tuned.maxHull], ["Shield", tuned.maxShield], ["Round damage", tuned.damage], ["Volleys / sec", Number(tuned.rate.toFixed(2))]];
@@ -516,7 +524,7 @@ const patrol = (() => {
     const art = $("workshopPortrait");
     art.replaceChildren(...(fleet ? ["kestrel", "needle", "manta"] : [scope]).map(id => {
       const look = profile.looks[id];
-      return PatrolArt.aircraftPortrait(id, appearance && previewFinish ? { ...look, [previewFinish.kind]: previewFinish.id } : look);
+      return SplashOneArt.aircraftPortrait(id, appearance && previewFinish ? { ...look, [previewFinish.kind]: previewFinish.id } : look);
     }));
     art.classList.toggle("fleet-formation", fleet);
     if (appearance) {
@@ -529,7 +537,7 @@ const patrol = (() => {
       const cost = part.prices[rank];
       const row = document.createElement("article");
       row.className = "part" + (part.id === "specialty" ? " signature-part" : "");
-      const icon = PatrolUpgrades.icon(part.icon, 56);
+      const icon = SplashOneUpgrades.icon(part.icon, 56);
       const head = document.createElement("header");
       const group = document.createElement("small");
       group.textContent = part.group;
@@ -556,15 +564,15 @@ const patrol = (() => {
       buy.setAttribute("aria-label", cost === undefined ? part.name + " at max rank" : "Upgrade " + part.name + " for " + cost + " credits");
       buy.onclick = async () => {
         buy.disabled = true;
-        const purchased = await PatrolHangar.purchase(scope, part.id);
+        const purchased = await SplashOneHangar.purchase(scope, part.id);
         renderParts();
         if (scope !== workshopScope || !hangar.open) return;
         if (!purchased) $("hangarStatus").textContent = "Balance or rank changed.";
         if (purchased) {
-          const current = PatrolHangar.read();
+          const current = SplashOneHangar.read();
           const rankNow = (fleet ? current.fleet : current.ships[scope])[part.id];
-          $("hangarStatus").textContent = part.name + " installed · Rank " + rankNow + (PatrolHangar.sessionOnly ? " · This visit" : "");
-          PatrolAudio.play("equip");
+          $("hangarStatus").textContent = part.name + " installed · Rank " + rankNow + (SplashOneHangar.sessionOnly ? " · This visit" : "");
+          SplashOneAudio.play("equip");
         }
         const next = $("parts").querySelector('[data-part="' + part.id + '"]:enabled') ||
           $("workbenches").querySelector('[aria-pressed="true"]');
@@ -592,8 +600,8 @@ const patrol = (() => {
     if (!option) return;
     const { kind, finish: id } = option.dataset;
     previewFinish = { kind, id };
-    const item = PatrolHangar.cosmetics[kind].find(finish => finish.id === id);
-    const profile = PatrolHangar.read(), look = profile.looks[workshopScope];
+    const item = SplashOneHangar.cosmetics[kind].find(finish => finish.id === id);
+    const profile = SplashOneHangar.read(), look = profile.looks[workshopScope];
     const short = look.owned[kind].includes(id) ? 0 : item.price - profile.credits;
     renderParts();
     $("hangarStatus").textContent = look[kind] === id ? item.name + " equipped." :
@@ -604,13 +612,13 @@ const patrol = (() => {
     if (!previewFinish) return;
     const scope = workshopScope, chosen = previewFinish;
     $("applyFinish").disabled = true;
-    const applied = await PatrolHangar.equipFinish(scope, chosen.kind, chosen.id);
+    const applied = await SplashOneHangar.equipFinish(scope, chosen.kind, chosen.id);
     renderParts();
     if (workshopScope !== scope || !hangar.open || workshopMode !== "appearance" || previewFinish !== chosen) return;
-    const item = PatrolHangar.cosmetics[chosen.kind].find(finish => finish.id === chosen.id);
-    $("hangarStatus").textContent = applied ? item.name + " equipped on " + PatrolGame.airframes[scope].name +
-      (PatrolHangar.sessionOnly ? " for this visit." : ".") : "Balance changed. Check the price and try again.";
-    if (applied) PatrolAudio.play("equip");
+    const item = SplashOneHangar.cosmetics[chosen.kind].find(finish => finish.id === chosen.id);
+    $("hangarStatus").textContent = applied ? item.name + " equipped on " + SplashOneGame.airframes[scope].name +
+      (SplashOneHangar.sessionOnly ? " for this visit." : ".") : "Balance changed. Check the price and try again.";
+    if (applied) SplashOneAudio.play("equip");
     $("finishes").querySelector('[data-kind="' + chosen.kind + '"][data-finish="' + chosen.id + '"]').focus({ preventScroll: true });
   };
   $("workbenches").addEventListener("click", event => {
@@ -643,7 +651,7 @@ const patrol = (() => {
     if (hangar.open) renderParts();
   });
   function showEarnings() {
-    const bill = PatrolHangar.statement(g);
+    const bill = SplashOneHangar.statement(g);
     const lines = [["Flight time", bill.flight], ["Targets", bill.combat], ["Missions", bill.missions]];
     if (bill.bonus) lines.push(["Carrier victory", bill.bonus]);
     $("earnedTotal").textContent = bill.total.toLocaleString("en-US") + (bill.total === 1 ? " credit" : " credits");
@@ -681,7 +689,7 @@ const patrol = (() => {
     $("bestAirframe").textContent = frame.name + " personal best";
     $("bestEarnings").textContent = "";
     const ledger = g.creditLedger;
-    settlement = PatrolHangar.deposit(g, bill).then(best => {
+    settlement = SplashOneHangar.deposit(g, bill).then(best => {
       if (g.creditLedger === ledger) $("bestEarnings").textContent = best.toLocaleString("en-US") + (best === 1 ? " credit" : " credits");
       refreshWallet();
     });
@@ -689,15 +697,15 @@ const patrol = (() => {
   const airframePick = $("airframePick");
   try {
     const saved = localStorage.getItem("patrol.airframe");
-    if (Object.hasOwn(PatrolGame.airframes, saved)) airframePick.value = saved;
+    if (Object.hasOwn(SplashOneGame.airframes, saved)) airframePick.value = saved;
   } catch { /* Keep the selection in memory when storage is unavailable. */ }
   function previewAirframe() {
-    const frame = PatrolGame.airframes[airframePick.value];
+    const frame = SplashOneGame.airframes[airframePick.value];
     $("touchPrimaryHint").textContent = frame.trigger;
     document.querySelector('[data-control="fire"]').textContent = frame.trigger;
     if (g?.state === "title") {
-      const profile = PatrolHangar.read();
-      g.player.frame = PatrolGame.tunedFrame(frame.id, profile.ships[frame.id]);
+      const profile = SplashOneHangar.read();
+      g.player.frame = SplashOneGame.tunedFrame(frame.id, profile.ships[frame.id]);
       g.player.frame.look = profile.looks[frame.id];
     }
   }
@@ -717,9 +725,9 @@ const patrol = (() => {
     transition = null;
     paused = false;
     unlockSound();
-    const profile = PatrolHangar.read();
+    const profile = SplashOneHangar.read();
     const id = airframePick.value;
-    g.start(minutes, profile.ships[id], id, profile.fleet);
+    g.start(minutes, profile.ships[id], id, profile.fleet, difficulty);
     g.player.frame.look = profile.looks[id];
     g.view = view;
     g.showGunLead = $("showLead").checked;
@@ -734,6 +742,20 @@ const patrol = (() => {
         durations.forEach((x) => x.setAttribute("aria-pressed", x === b));
       }),
   );
+  let difficulty = 1;
+  const difficultyButtons = document.querySelectorAll("[data-difficulty]");
+  const difficultyKey = "splashOne.difficulty";
+  function selectDifficulty(value) {
+    difficulty = value === 2 || value === 3 ? value : 1;
+    for (const button of difficultyButtons) button.setAttribute("aria-pressed", Number(button.dataset.difficulty) === difficulty);
+  }
+  try { selectDifficulty(Number(localStorage.getItem(difficultyKey))); } catch {}
+  for (const button of difficultyButtons) {
+    button.onclick = () => {
+      selectDifficulty(Number(button.dataset.difficulty));
+      try { localStorage.setItem(difficultyKey, String(difficulty)); } catch {}
+    };
+  }
   $("launch").onclick = start;
   function pause() {
     if (g?.state !== "playing") return;
@@ -748,7 +770,7 @@ const patrol = (() => {
   $("currentView").onchange = () => changeView(cameraIds.indexOf($("currentView").value));
   function flightDeck() {
     clearInput();
-    g = PatrolGame.create(world, notify);
+    g = SplashOneGame.create(world, notify);
     previewAirframe();
     g.view = view = 0;
     paused = false;
@@ -768,7 +790,7 @@ const patrol = (() => {
     label.textContent = info;
     title.textContent = name;
     text.append(label, title);
-    row.append(PatrolUpgrades.icon(icon, 56), text);
+    row.append(SplashOneUpgrades.icon(icon, 56), text);
     return row;
   }
   const pauseTabList = $("pauseTabs");
@@ -838,7 +860,7 @@ const patrol = (() => {
   }
   function showEquipment() {
     const p = g.player, frame = p.frame;
-    $("pausePortrait").replaceChildren(PatrolArt.aircraftPortrait(frame.id, frame.look));
+    $("pausePortrait").replaceChildren(SplashOneArt.aircraftPortrait(frame.id, frame.look));
     $("airframeClass").textContent = workshops[frame.id].title;
     $("airframeName").textContent = frame.name;
     for (const [id, value, max] of [["pauseShield", p.shield, frame.maxShield], ["pauseHull", p.hull, frame.maxHull]]) {
@@ -857,8 +879,8 @@ const patrol = (() => {
     $("patrolEquipment").hidden = !upgrades.length;
     $("loadout").replaceChildren(...upgrades.map(item =>
       equipmentCard(item.id, item.name, "Rank " + item.level)));
-    const parts = PatrolHangar.partsFor(frame.id).filter(part => g.mods[part.id] > 0);
-    const perks = PatrolHangar.fleetParts.filter(part => g.fleet[part.id] > 0);
+    const parts = SplashOneHangar.partsFor(frame.id).filter(part => g.mods[part.id] > 0);
+    const perks = SplashOneHangar.fleetParts.filter(part => g.fleet[part.id] > 0);
     $("hangarEquipment").hidden = !parts.length && !perks.length;
     $("installedParts").replaceChildren(
       ...parts.map(part => equipmentCard(part.icon || part.id, part.name, "Rank " + g.mods[part.id])),
@@ -887,11 +909,11 @@ const patrol = (() => {
     reroll.onclick = () => { if (g.reroll()) redraw(false); };
     banish.onclick = () => redraw(!banishing);
     $("modalText").textContent = banishing ? "Pick an upgrade to banish for this patrol. Then choose your upgrade." : detail;
-    PatrolUpgrades.show(actions, g.choices, id => {
+    SplashOneUpgrades.show(actions, g.choices, id => {
       if (banishing) {
         if (g.banish(id)) redraw(false);
       } else if (g.choose(id)) {
-        PatrolAudio.play("equip");
+        SplashOneAudio.play("equip");
         sync();
       }
     }, { banishing, celebrate });
@@ -905,7 +927,7 @@ const patrol = (() => {
     $("flight").hidden = home;
     $("pause").hidden = !active();
     $("touch").hidden = !active() || !touchMode;
-    PatrolAudio.flight(active(), g);
+    SplashOneAudio.flight(active(), g);
     document.body.classList.toggle("steering", active());
     document.body.classList.toggle("flying", !home);
     document.body.classList.toggle("cockpit", !home && view === 1);
@@ -964,7 +986,8 @@ const patrol = (() => {
       $("currentView").value = cameraIds[view];
       title = "Paused";
       kicker = detail = "";
-      $("wave").textContent = g.wave > g.waveCount ? "Endless · Wave " + g.wave : "Wave " + g.wave + " / " + g.waveCount;
+      const waveLabel = g.wave > g.waveCount ? "Endless · Wave " + g.wave : "Wave " + g.wave + " / " + g.waveCount;
+      $("wave").textContent = waveLabel + " · Difficulty " + g.difficulty;
       const track = $("waveTrack");
       track.hidden = g.wave > g.waveCount;
       track.replaceChildren(...(track.hidden ? [] : Array.from({length: g.waveCount}, (_, i) => {
@@ -973,7 +996,7 @@ const patrol = (() => {
         else if (i < g.completedWaves) stop.className = "complete";
         return stop;
       })));
-      $("missionScenery").replaceChildren(PatrolDeck.landscape(world.mapId, $("lightPick").value));
+      $("missionScenery").replaceChildren(SplashOneDeck.landscape(world.mapId, $("lightPick").value));
       $("missionTitle").textContent = g.missionTitle;
       $("objective").textContent = g.objective;
       $("bonus").textContent = g.bonus;
@@ -1194,11 +1217,11 @@ const patrol = (() => {
         toastTimer -= dt;
         if (toastTimer <= 0) $("toast").textContent = "";
       }
-      PatrolAudio.flight(active(), g);
+      SplashOneAudio.flight(active(), g);
       const cam = camera();
       world.render(cam, g.time);
       ink.clearRect(0, 0, overlay.width, overlay.height);
-      PatrolArt.draw(ink, g, cam, projectFor(cam));
+      SplashOneArt.draw(ink, g, cam, projectFor(cam));
       if (stamp - lastUi > 90 || lastPanel !== (paused ? "paused" : g.state) + ":" + g.wave) {
         sync();
         lastUi = stamp;
@@ -1227,17 +1250,17 @@ const patrol = (() => {
       $("graphicsStatus").textContent = "The terrain could not be restored. Reload the game to fly again.";
     }
   });
-  const deck = PatrolDeck.create();
+  const deck = SplashOneDeck.create();
   hangar.addEventListener("close", previewAirframe);
   function updateSky() {
     const id = world?.mapId || $("regionPick").value;
-    const region = PatrolDeck.regions[id];
+    const region = SplashOneDeck.regions[id];
     const mode = $("lightPick").value;
     world?.setSky(mode);
     const suffix = mode === "night" ? " · NIGHT" : mode === "storm" ? " · STORM" : "";
     $("regionName").textContent = region.name.toUpperCase() + suffix;
     $("regionIntro").textContent = region.description;
-    document.title = "Patrol — " + region.name + suffix;
+    document.title = "Splash One — " + region.name + suffix;
   }
   async function loadMap() {
     if (loadingMap || (g && g.state !== "title")) return;
@@ -1250,7 +1273,7 @@ const patrol = (() => {
     const firstLoad = !world;
     try {
       resize();
-      const next = await PatrolWorld.create(
+      const next = await SplashOneWorld.create(
         canvas,
         (fraction) => {
           const pct = Math.round(fraction * 100);

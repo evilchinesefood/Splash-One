@@ -1,5 +1,5 @@
 // Flight-deck card illustrations share the aircraft meshes used in flight.
-window.PatrolDeck = (() => {
+window.SplashOneDeck = (() => {
   const regions = {
     lake: {name: "Autumn Lake District", description: "Fly among island forests and mountain lakes.", accent: "#c6cf8e"},
     mesa: {name: "Painted Mesa", description: "Follow the river between red sandstone mesas.", accent: "#efa77c"},
@@ -114,14 +114,14 @@ window.PatrolDeck = (() => {
     const dialog=document.getElementById("deckPicker"), choices=document.getElementById("deckChoices");
     const buttons=Object.keys(groups).map(id=>document.getElementById(id));
     const region=()=>document.getElementById("regionPick").value;
-    const getOptions=id=>id==="airframePick" ? PatrolGame.airframes : id==="regionPick" ? regions : skies(region());
+    const getOptions=id=>id==="airframePick" ? SplashOneGame.airframes : id==="regionPick" ? regions : skies(region());
     function art(id,key,look) {
       const image=node("span",id==="airframePick"?"deck-art aircraft-art":"deck-art");
-      image.append(id==="airframePick"?PatrolArt.aircraftPortrait(key,look):landscape(id==="regionPick"?key:region(),id==="regionPick"?null:key));
+      image.append(id==="airframePick"?SplashOneArt.aircraftPortrait(key,look):landscape(id==="regionPick"?key:region(),id==="regionPick"?null:key));
       return image;
     }
     function refresh() {
-      const looks = PatrolHangar.read().looks;
+      const looks = SplashOneHangar.read().looks;
       for(const btn of buttons){
         const option=getOptions(btn.id)[btn.value];
         const content=node("span","deck-pick-copy");
@@ -137,7 +137,7 @@ window.PatrolDeck = (() => {
       choices.classList.toggle("deck-aircraft",aircraft);
       choices.style.setProperty("--count",options.length);
       document.getElementById("deckPickerTitle").textContent=groups[btn.id].title;
-      const profile=aircraft ? PatrolHangar.read() : null;
+      const profile=aircraft ? SplashOneHangar.read() : null;
       choices.replaceChildren(...options.map(([key,option])=>{
         const card=node("button","deck-option");
         card.type="button";card.dataset.choice=key;
@@ -147,7 +147,7 @@ window.PatrolDeck = (() => {
         if(key===chosen)image.append(node("span","deck-selected","✓ Selected"));
         copy.append(node("strong","choice-name",option.name));
         const ranks = aircraft ? profile.ships[key] : null;
-        const f = aircraft ? PatrolGame.tunedFrame(key, ranks) : null;
+        const f = aircraft ? SplashOneGame.tunedFrame(key, ranks) : null;
         let detail = option.description;
         if (f) {
           const power = key === "manta" ? "3 × " + f.damage : f.damage;

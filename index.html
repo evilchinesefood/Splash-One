@@ -4,48 +4,58 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
     <meta name="theme-color" content="#211d29" />
-    <link rel="icon" type="image/png" sizes="48x48" href="favicon.png" />
-    <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png" />
-    <title>Patrol — Autumn Lake District</title>
-    <link rel="stylesheet" href="patrol.css" />
-    <link rel="stylesheet" href="upgrades.css" />
-    <link rel="stylesheet" href="deck.css" />
-    <link rel="stylesheet" href="pause-loadout.css" />
-    <link rel="stylesheet" href="pause-preferences.css" />
-    <script defer src="world.js"></script>
-    <script defer src="game.js"></script>
-    <script defer src="art.js"></script>
-    <script defer src="audio.js"></script>
-    <script defer src="upgrades.js"></script>
-    <script defer src="hangar.js"></script>
-    <script defer src="deck.js"></script>
-    <script defer src="bindings.js"></script>
-    <script defer src="main.js"></script>
+    <link rel="icon" type="image/png" sizes="48x48" href="assets/icons/favicon.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="assets/icons/apple-touch-icon.png" />
+    <title>Splash One — Autumn Lake District</title>
+    <link rel="stylesheet" href="styles/game.css" />
+    <link rel="stylesheet" href="styles/upgrades.css" />
+    <link rel="stylesheet" href="styles/deck.css" />
+    <link rel="stylesheet" href="styles/pause-loadout.css" />
+    <link rel="stylesheet" href="styles/pause-preferences.css" />
+    <script defer src="src/game/world.js"></script>
+    <script defer src="src/game/game.js"></script>
+    <script defer src="src/game/art.js"></script>
+    <script defer src="src/game/audio.js"></script>
+    <script defer src="src/ui/upgrades.js"></script>
+    <script defer src="src/ui/hangar.js"></script>
+    <script defer src="src/ui/deck.js"></script>
+    <script defer src="src/ui/bindings.js"></script>
+    <script defer src="src/main.js"></script>
   </head>
   <body>
-    <main id="stage" aria-label="Patrol fighter jet game">
+    <main id="stage" aria-label="Splash One fighter jet game">
       <canvas id="world" aria-hidden="true"></canvas><canvas id="art" aria-hidden="true"></canvas>
       <div id="shade"></div>
       <button id="pause" type="button" hidden aria-label="Pause" title="Pause"><span aria-hidden="true"></span></button>
       <section id="home" aria-label="Start patrol">
-        <h1 aria-label="Patrol">
-          <canvas id="wordmark" width="200" height="42" aria-hidden="true"></canvas>
+        <h1 aria-label="Splash One">
+          <canvas id="wordmark" width="264" height="32" aria-hidden="true"></canvas>
         </h1>
         <p class="lede">
           <span id="regionIntro">Fly among island forests and mountain lakes.</span><br />Build your jet for the
           carrier showdown.
         </p>
-        <div class="deck-picks" role="group" aria-label="Patrol setup">
+        <div class="deck-picks" role="group" aria-label="Flight setup">
           <button type="button" id="airframePick" value="kestrel" aria-haspopup="dialog">Aircraft</button>
           <button type="button" id="regionPick" value="lake" aria-haspopup="dialog">Region</button>
           <button type="button" id="lightPick" value="day" aria-haspopup="dialog">Sky</button>
         </div>
-        <div class="duration" aria-label="Patrol length">
-          <span>Patrol length</span>
-          <div role="group" aria-label="Select patrol length">
-            <button data-duration="10" aria-pressed="true">10 min</button
-            ><button data-duration="15" aria-pressed="false">15 min</button
-            ><button data-duration="20" aria-pressed="false">20 min</button>
+        <div class="sortie-options">
+          <div class="duration" aria-label="Patrol length">
+            <span>Patrol length</span>
+            <div role="group" aria-label="Select patrol length">
+              <button data-duration="10" aria-pressed="true">10 min</button
+              ><button data-duration="15" aria-pressed="false">15 min</button
+              ><button data-duration="20" aria-pressed="false">20 min</button>
+            </div>
+          </div>
+          <div class="duration" aria-label="Difficulty">
+            <span>Difficulty</span>
+            <div role="group" aria-label="Select difficulty">
+              <button type="button" data-difficulty="1" aria-pressed="true" title="Standard formations">1</button>
+              <button type="button" data-difficulty="2" aria-pressed="false" title="Two extra wingmen per formation">2</button>
+              <button type="button" data-difficulty="3" aria-pressed="false" title="Four extra wingmen per formation">3</button>
+            </div>
           </div>
         </div>
         <div class="deck-actions">

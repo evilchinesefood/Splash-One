@@ -1,6 +1,6 @@
 /* Procedural terrain and cumulus maps are built once. CPU flight and GPU tracing
    read the same quantized elevation data, including the raised forest canopy. */
-window.PatrolWorld = (() => {
+window.SplashOneWorld = (() => {
   const SIZE = 1024,
     SPAN = 8192,
     MIN = -256,
@@ -688,7 +688,7 @@ window.PatrolWorld = (() => {
       depth: false,
       preserveDrawingBuffer: false,
     });
-    if (!gl) throw new Error("Patrol needs WebGL 2 to draw the world.");
+    if (!gl) throw new Error("Splash One needs WebGL 2 to draw the world.");
     const data = await maps(onProgress, mapId);
     let graphics = gl.isContextLost() ? null : uploadTerrain(gl, data);
     function height(x, z) {

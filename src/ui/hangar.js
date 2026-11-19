@@ -1,5 +1,5 @@
 /* The career balance and installed parts share one save so spending and installation stay together. */
-window.PatrolHangar = (() => {
+window.SplashOneHangar = (() => {
   const legacyKey = "patrol.career.v1";
   const key = "patrol.career.v2";
   const prices = [40, 95, 175];

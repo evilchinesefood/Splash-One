@@ -1,5 +1,5 @@
 /* All audio is generated on the first user gesture. No sound files or network requests. */
-window.PatrolAudio = (() => {
+window.SplashOneAudio = (() => {
   const muteKey = "patrol.audio.muted";
   const musicKey = "patrol.music.muted";
   const levels = { music: 100, effects: 100 };
@@ -87,7 +87,7 @@ window.PatrolAudio = (() => {
       updateEngine();
       return enabled && ctx.state === "running";
     } catch (error) {
-      console.warn("Patrol audio could not start", error);
+      console.warn("Splash One audio could not start", error);
       return false;
     }
   }

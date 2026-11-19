@@ -307,6 +307,7 @@
       midwaveDraft: false,
       wave: 0,
       waveCount: 6,
+      difficulty: 1,
       missionTitle: "",
       objective: "",
       bonus: "",
@@ -332,6 +333,7 @@
     };
     let sequence = [],
       mission,
+      groups,
       missionTime,
       group,
       required,
@@ -368,7 +370,7 @@
       g.lastReward = g.lastReward ? g.lastReward + "  /  " + line : line;
       notify("message", line);
     }
-    function start(minutes = 10, installed = {}, frameId = "kestrel", fleet = {}) {
+    function start(minutes = 10, installed = {}, frameId = "kestrel", fleet = {}, difficulty = 1) {
       const count = clamp(Math.round((Number(minutes) || 10) / 2), 5, 20);
       sequence = ["sweep", "beacons", "rush", "nest", "moons"];
       const extras = ["rush", "nest", "moons"];
@@ -382,6 +384,7 @@
         elapsed: 0,
         wave: 0,
         waveCount: sequence.length,
+        difficulty: difficulty === 2 || difficulty === 3 ? difficulty : 1,
         lastReward: "",
         lossReason: "",
         terrainWarning: false,
@@ -408,11 +411,20 @@
       steering = false;
       nextWave();
     }
+    function withWingmen(kinds) {
+      const extra = (g.difficulty - 1) * 2;
+      if (!extra) return kinds;
+      return kinds.concat(Array.from({length: extra}, (_, i) => kinds[i % kinds.length]));
+    }
     function nextWave() {
       g.wave++;
       const key = sequence[g.wave - 1] || ["rush", "nest", "moons", "fleet"][(g.wave - g.waveCount - 1) % 4];
       mission = encounters[key];
-      waveTargetCount = mission.quota || mission.groups.reduce((sum, kinds) => sum + kinds.length, 0);
+      groups = mission.groups.map(kinds => {
+        const first = kinds[0];
+        return first === "carrier" || models[first].boat || !models[first].speed ? kinds : withWingmen(kinds);
+      });
+      waveTargetCount = mission.quota ? mission.quota + g.difficulty - 1 : groups.reduce((sum, kinds) => sum + kinds.length, 0);
       waveTargetsDestroyed = 0;
       midwaveAvailable = true;
       g.midwaveDraft = false;
@@ -567,10 +579,10 @@
 
     function spawnGroup() {
       const p = g.player,
-        kinds = mission.groups[group];
+        kinds = groups[group];
       const ground = models[kinds[0]].speed === 0;
       const bearing = p.yaw + (group % 2 ? 0.45 : -0.1);
-      required = mission.quota || kinds.length;
+      required = mission.quota ? waveTargetCount : kinds.length;
       if (models[kinds[0]].boat) {
         for (const [i, kind] of kinds.entries()) {
           const side = (i - (kinds.length - 1) / 2) * 320;
@@ -582,7 +594,7 @@
             spawn("relay", site.x, world.height(site.x, site.z) + 6, site.z);
           }
         }
-        spawnFlights(["interceptor", "dart", "jet"], bearing + 0.3, 640, false);
+        spawnFlights(withWingmen(["interceptor", "dart", "jet"]), bearing + 0.3, 640, false);
       } else if (ground) {
         const range = 2250 + group * 220;
         for (const [i, kind] of kinds.entries()) {
@@ -594,10 +606,9 @@
           spawn(kind, site.x, world.height(site.x, site.z) + (kind === "prism" ? 16 : 6), site.z);
         }
         // Fighters intercept the approach. Only the stations count toward the objective.
-        const defenders =
-          mission === encounters.nest
+        const defenders = withWingmen(mission === encounters.nest
             ? ["crescent", "dart", "crescent", "jet", "bomber", "jet"]
-            : ["interceptor", "dart", "jet", "jet", "bomber"];
+            : ["interceptor", "dart", "jet", "jet", "bomber"]);
         const alive = g.enemies.filter((e) => !e.mandatory && e.hp > 0).length;
         spawnFlights(defenders.slice(0, Math.max(0, defenders.length - alive)), bearing, 520, false);
         const station = g.enemies.find((e) => groundUnit(e) && e.hp > 0);
@@ -609,7 +620,7 @@
         }
       } else if (mission === encounters.fleet) {
         spawnFlights(kinds, bearing, 1400, true);
-        spawnFlights(["dart", "bomber", "jet", "crescent", "crescent"], bearing + 0.23, 690, false);
+        spawnFlights(withWingmen(["dart", "bomber", "jet", "crescent", "crescent"]), bearing + 0.23, 690, false);
       } else {
         const range = mission === encounters.sweep ? 300 : 660;
         spawnFlights(kinds, bearing, range, true);
@@ -625,8 +636,8 @@
         return;
       }
       if (mission.quota) {
-        g.objective = waveTargetsDestroyed + "/" + mission.quota + " jets destroyed" +
-          (midwaveAvailable ? " · upgrade at " + Math.ceil(mission.quota / 2) : "");
+        g.objective = waveTargetsDestroyed + "/" + waveTargetCount + " jets destroyed" +
+          (midwaveAvailable ? " · upgrade at " + Math.ceil(waveTargetCount / 2) : "");
         return;
       }
       g.objective = mission.detail + (waveTargetCount > 1 ? "  ·  " + waveTargetsDestroyed + "/" + waveTargetCount : "");
@@ -1549,11 +1560,11 @@
           endWave();
           return;
         }
-        if (missionTime >= nextRaid && g.enemies.length < 5) {
-          group = (group + 1) % mission.groups.length;
+        if (missionTime >= nextRaid && g.enemies.length < 5 + (g.difficulty - 1) * 2) {
+          group = (group + 1) % groups.length;
           spawnGroup();
           nextRaid = missionTime + 9;
-        } else if (g.enemies.length <= 2 && nextRaid - missionTime > 2.5) nextRaid = missionTime + 2.5;
+        } else if (g.enemies.length <= g.difficulty + 1 && nextRaid - missionTime > 2.5) nextRaid = missionTime + 2.5;
         return;
       }
       // A long straight flight can leave every visible aircraft behind. Send
@@ -1563,7 +1574,7 @@
         const inRange = (e) => distance(g.player, e) < 1500;
         if (!g.enemies.some((e) => !groundUnit(e) && !e.boat && inRange(e))) {
           g.enemies = g.enemies.filter((e) => e.mandatory && !mission.quota);
-          spawnFlights(["jet", "interceptor", "jet"], g.player.yaw - 0.25, 600, !!mission.quota);
+          spawnFlights(withWingmen(["jet", "interceptor", "jet"]), g.player.yaw - 0.25, 600, !!mission.quota);
           g.target = g.enemies.find((e) => e.mandatory) || null;
         }
       }
@@ -1571,7 +1582,7 @@
         gap += dt;
         if (gap >= (mission.quota ? 0.35 : 1.3)) {
           gap = 0;
-          if (group + 1 < mission.groups.length) {
+          if (group + 1 < groups.length) {
             group++;
             spawnGroup();
             notify("message", "New contacts · tracker updated");
@@ -1592,5 +1603,5 @@
     return g;
   }
 
-  window.PatrolGame = { create, airframes, tunedFrame };
+  window.SplashOneGame = { create, airframes, tunedFrame };
 })();

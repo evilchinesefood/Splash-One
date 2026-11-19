@@ -2063,5 +2063,5 @@
     drawMesh(ctx, plane, aircraftMesh(id, look, .125, true), basis(plane), project, 4, false);
     return canvas;
   }
-  window.PatrolArt = { draw, aircraftPortrait };
+  window.SplashOneArt = { draw, aircraftPortrait };
 })();

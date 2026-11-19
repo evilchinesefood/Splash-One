@@ -114,3 +114,12 @@
   .deck-pick-copy strong {font-size:13px;}
   .deck-pick-copy small {font-size:9px;}
 }
+
+
+.sortie-options { display: flex; flex-wrap: wrap; gap: 8px 22px; margin: 0 0 15px; }
+.sortie-options .duration { margin: 0; align-items: flex-start; flex-direction: column; gap: 5px; }
+.sortie-options button { min-width: 34px; }
+@media (max-width: 520px), (max-height: 520px) {
+  .sortie-options { gap: 8px 12px; margin-bottom: 10px; }
+  .sortie-options button { padding-inline: 5px; }
+}

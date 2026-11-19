@@ -1,5 +1,5 @@
 "use strict";
-window.PatrolBindings = (() => {
+window.SplashOneBindings = (() => {
   const key = "patrol.bindings.v1";
   const actions = {
     fire: ["Primary weapon", "Mouse0"], missile: ["Missile", "Mouse2", "KeyF"],

@@ -1,5 +1,5 @@
 /* Hand-plotted equipment sprites. Each cell is a pixel in the illustration. */
-window.PatrolUpgrades = (() => {
+window.SplashOneUpgrades = (() => {
   const gear = {
     wisps: {
       color: "#ffc96b", shade: "#906241",

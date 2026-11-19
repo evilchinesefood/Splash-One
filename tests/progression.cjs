@@ -13,11 +13,11 @@ function patrol(save = {}, random) {
     env.random = random;
     vm.runInContext("Math.random = random", env);
   }
-  for (const file of ["game.js", "hangar.js"]) {
+  for (const file of ["src/game/game.js", "src/ui/hangar.js"]) {
     vm.runInContext(fs.readFileSync(path.join(__dirname, "..", file), "utf8"), env);
   }
-  const game = env.window.PatrolGame.create({ height: () => 0 });
-  return { game, hangar: env.window.PatrolHangar };
+  const game = env.window.SplashOneGame.create({ height: () => 0 });
+  return { game, hangar: env.window.SplashOneHangar };
 }
 const step = 1 / 60;
 function hit(game, target) {
