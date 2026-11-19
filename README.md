@@ -8,6 +8,10 @@ Fly a pixel-art jet through autumn lake country, sandstone mesas, or a storm ove
 | --- | --- |
 | ![Twin-engine jet pursuing a formation above the lake at sunset](docs/images/chase.jpg) | ![Enemy jet crossing the cockpit sights above the green radar](docs/images/cockpit.jpg) |
 
+| Painted Mesa | Jade Isle by moonlight | Storm patrol |
+| --- | --- | --- |
+| ![Cockpit view along a river between red mesas](docs/images/mesa-flight.jpg) | ![Aircraft ahead of the cockpit under a crescent moon](docs/images/island-moonlight.jpg) | ![North-up view of fighters turning through rain](docs/images/storm-flight.jpg) |
+
 ## First flight
 
 Choose Kestrel for a balanced cannon, Needle for a fast jet with a piercing lance, or Manta for armor and a scatter cannon. Difficulty 1 uses the original formations. Levels 2 and 3 add three and six aircraft per formation.
